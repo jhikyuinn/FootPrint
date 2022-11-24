@@ -4,9 +4,9 @@ import 'react-native-get-random-values';
 
 import { StyleSheet, Text, View, TouchableOpacity,KeyboardAvoidingView, Touchable } from 'react-native';
 import { useState, useEffect } from 'react';
-import DesignButton from '../Components/DesignButton';
 import { Header } from 'react-native-elements';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+import axios from 'axios';
+import List from './list';
 
 //gunDB
 import "gun/lib/mobile.js";
@@ -26,43 +26,50 @@ const gun = new Gun("http://203.247.240.236:8765");
 function Notification({alias,password,pair,navigation}){
     const [roomState, setRoom] = useState("");
 
-    const onChangeRoomHandler = (keyvalue,e) => {
-        setRoom({
-            [keyvalue]: e,
+    const [roomenterinfo, setRoomenterInfo] = useState({
+      enterroompostID:"",
+      enterroomnumber:"",
+    });
+
+    useEffect(() => {
+      history()
+      {}
+  }, [])
+
+    const history=()=>{
+      axios.get(`http://203.247.240.236:1206/api/queryallrecords`, {
+        }).then((res) => {
+            res.data.map((records) => {
+            {records.Record.PostID === alias  ?
+              setRoomenterInfo({
+                ...roomenterinfo,
+                enterroompostID:records.Record.PostID,
+                enterroomnumber:records.Record.RoomNumber,
+            })
+              :
+              <></>
+            }
+          })
+          
         })
-    }
-    const EntranceBtn=()=>{
-        console.log(alias,roomState,pair)
-        navigation.navigate("Chat", {
-            alias:alias,
-            roomState: {"RoomState": "Study"},
-            pair: pair,
-            navigation: navigation
-
-        });
-
     }
 
     return(
         <KeyboardAvoidingView 
-    style = {{ flex: 1 }}
+    style = {{ flex: 1 , backgroundColor:"#6c7bb8"}}
     behavior={Platform.OS === "ios" ? "padding" : null}>
 
     <Header
         backgroundColor='#6c7bb8'
         leftComponent={{text:"Notification",style:{width:200,fontSize:35,color:"black"}}}
         />
-        <View style={styles.home} >
-        <View style={styles.alarm}>
-          <Text style={styles.Textsize2}>Host : Younglee</Text>
-          <Text style={styles.Textsize2}>Room : leele</Text>
-          <TouchableOpacity onPress={() => EntranceBtn()} style={{marginLeft:"80%"}}>
-              <Ionicons name="enter-outline" size={35} color={"black"}/>
-          </TouchableOpacity>
-        </View>
-        </View>
-
-
+        {roomenterinfo && <Text>roomenterinfo.enterroomnumber</Text>!==""?
+              <>
+              {console.log("→"+JSON.stringify(roomenterinfo))}
+              {Object.values(roomenterinfo).map((value) => (<>{console.log("😊"+value)}<List key={value} value={value} navigation={navigation}/></>))}
+              </>:
+              <> </>
+            }
       </KeyboardAvoidingView>
 )
 }

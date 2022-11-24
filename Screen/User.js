@@ -41,13 +41,12 @@ function User({alias,password,pair,navigation}){
         leftComponent={{text:"User Info",style:{width:200,fontSize:35,color:"black"}}}
     />
     <View style={styles.home} >
+          <Ionicons style={{marginTop:"20%"}} name="person-circle-outline" size={200}  color="black" />
           <Text style={styles.Textsize2}>Welcome! {alias}  </Text>
-          <DesignButton text="Logout" buttonFunction={() => LogoutBtn()} width="30%" height="8%" bgcolor="white" color={"black"} outline={false}/>
+          <DesignButton text="Profile edit" buttonFunction={() => LogoutBtn()} width="30%" height="6%" bgcolor="white" color={"black"} outline={false}/>
+          <DesignButton text="Logout" buttonFunction={() => LogoutBtn()} width="30%" height="6%" bgcolor="white" color={"black"} outline={false}/>
         
     </View>
-       
-
-
       </KeyboardAvoidingView>
 )
 }
@@ -57,10 +56,9 @@ export default User;
 const styles = StyleSheet.create({
     home:{
       alignItems: "center",
-      justifyContent: "center",
-      backgroundColor:"#6c7bb8",
       width:"100%",
-      height:"100%"
+      height:"100%",
+      backgroundColor:"#6c7bb8"
     },
     Textsize1:{
       fontSize:40,
@@ -70,7 +68,9 @@ const styles = StyleSheet.create({
     Textsize2:{
       fontSize:18,
       color:"black",
-      fontWeight: 'bold'
+      fontWeight: 'bold',
+      marginTop:"10%",
+      marginBottom:"10%"
     },
     input: {
       backgroundColor:"white",

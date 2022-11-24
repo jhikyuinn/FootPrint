@@ -6,6 +6,8 @@ import { StyleSheet, Text, View, TextInput,KeyboardAvoidingView,TouchableOpacity
 import { useState, useEffect } from 'react';
 import { Header } from 'react-native-elements';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import axios from 'axios';
+import List from './list';
 
 //gunDB
 import "gun/lib/mobile.js";
@@ -16,6 +18,7 @@ import 'gun/lib/radisk.js';
 import 'gun/lib/store.js';
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import asyncStore from "gun/lib/ras.js";
+import cons from 'gun';
 
 Gun({ store: asyncStore({ AsyncStorage }) })
 
@@ -23,16 +26,42 @@ const gun = new Gun('http://203.247.240.236:8765');
 
 function Ready({alias,password,pair,navigation}){
     const [roomState, setRoom] = useState("");
+    const [currentalias, setCurrentAlias] = useState("");
+
+    const [roomenterinfo, setRoomenterInfo] = useState({
+      enterroompostID:"",
+      enterroomnumber:"",
+    });
+
     const onChangeRoomHandler = (keyvalue,e) => {
         setRoom({
             [keyvalue]: e,
         })
     }
 
-    const [currentalias, setCurrentAlias] = useState('');
     useEffect(() => {
         authUser()
+        history()
+        {"🧑🔴"+console.log(roomenterinfo)}
     }, [])
+
+    const history=()=>{
+      axios.get(`http://203.247.240.236:1206/api/queryallrecords`, {
+        }).then((res) => {
+            res.data.map((records) => {
+            {records.Record.PostID === alias  ?
+              setRoomenterInfo({
+                ...roomenterinfo,
+                enterroompostID:records.Record.PostID,
+                enterroomnumber:records.Record.RoomNumber,
+            })
+              :
+              <></>
+            }
+          })
+          
+        })
+    }
   
     const authUser = () => 
       new Promise((resolve, reject) => {
@@ -43,12 +72,12 @@ function Ready({alias,password,pair,navigation}){
                 resolve({user: gun.user().pair(), err: res.err});
               } else {
                 window.alert(res.err);
-                resolve({user: gun.user().pair()});
+                resolve({user : gun.user().pair()});
               }
           })
       })
     const EntranceBtn=()=>{
-        console.log(alias,roomState,pair)
+      setRoom("")
         navigation.navigate("Chat", {
             alias:alias,
             roomState: roomState,
@@ -73,18 +102,17 @@ function Ready({alias,password,pair,navigation}){
               <Ionicons name="search-outline" size={35} color={"black"}/>
           </TouchableOpacity>
           </View>
-          <View>
-            
-              <Text style={styles.Textsize3}>History </Text>
-              {/** map을 이용해서 방 검색에 대한 기록과 그 방의 정보, 입장 가능한 아이콘 */}
-              {/**<View style={styles.alarm}>
-              <Text style={styles.Textsize2}>Host : Jaeseok</Text>
-              <Text style={styles.Textsize2}>Room : StudyWithMe</Text>
-              <TouchableOpacity onPress={() => EntranceBtn()} style={{marginLeft:"80%"}}>
-                  <Ionicons name="enter-outline" size={35} color={"white"}/>
-              </TouchableOpacity>
-              </View> */}
-         
+          <View style={{marginTop:"10%",width:"90%"}}>
+            <Text style={styles.Textsize3}>History </Text>
+            <ScrollView style={{marginBottom:"18%",height:"70%"}}>
+              {roomenterinfo && <Text>roomenterinfo.enterroomnumber</Text>!==""?
+              <>
+              {console.log("→"+JSON.stringify(roomenterinfo))}
+              {Object.values(roomenterinfo).map((value,idx) => (<>{console.log("😊"+value)}<List key={idx} value={value} navigation={navigation}/></>))}
+              </>:
+              <> </>
+            }
+            </ScrollView>
           </View>
         </View>
         </KeyboardAvoidingView>
@@ -109,7 +137,7 @@ const styles = StyleSheet.create({
     Textsize2:{
       fontSize:18,
       marginBottom:"3%",
-      color:"white",
+      color:"black",
       fontWeight: 'bold'
     },
     Textsize3:{
