@@ -6,7 +6,7 @@ import { StyleSheet, Text, View, TouchableOpacity,KeyboardAvoidingView, Touchabl
 import { useState, useEffect } from 'react';
 import { Header } from 'react-native-elements';
 import axios from 'axios';
-import List from './list';
+import NotificationList from './notificationlist';
 
 //gunDB
 import "gun/lib/mobile.js";
@@ -32,27 +32,22 @@ function Notification({alias,password,pair,navigation}){
     });
 
     useEffect(() => {
-      history()
-      {}
+      notification()
   }, [])
 
-    const history=()=>{
+    const notification=()=>{
       axios.get(`http://203.247.240.236:1206/api/queryallrecords`, {
         }).then((res) => {
-            res.data.map((records) => {
-            {records.Record.PostID === alias  ?
-              setRoomenterInfo({
-                ...roomenterinfo,
-                enterroompostID:records.Record.PostID,
-                enterroomnumber:records.Record.RoomNumber,
-            })
-              :
-              <></>
-            }
+          const Roomnotification=[];
+          res.data.map((records) => {
+          {records.Record.Function==="invitation"?
+            Roomnotification.push([records.Record.HostID,records.Record.RoomNumber]):
+            <></>
+          }
+          setRoomenterInfo(Roomnotification)
           })
-          
         })
-    }
+      }
 
     return(
         <KeyboardAvoidingView 
@@ -61,12 +56,12 @@ function Notification({alias,password,pair,navigation}){
 
     <Header
         backgroundColor='#6c7bb8'
-        leftComponent={{text:"Notification",style:{width:200,fontSize:35,color:"black"}}}
+        leftComponent={{text:"Notification",style:{width:250,fontSize:35,color:"black"}}}
         />
         {roomenterinfo && <Text>roomenterinfo.enterroomnumber</Text>!==""?
               <>
               {console.log("→"+JSON.stringify(roomenterinfo))}
-              {Object.values(roomenterinfo).map((value) => (<>{console.log("😊"+value)}<List key={value} value={value} navigation={navigation}/></>))}
+              {Object.values(roomenterinfo).map((value,idx) => (<><NotificationList key={idx} value={value} navigation={navigation} alias={alias} pair={pair} /></>))}
               </>:
               <> </>
             }

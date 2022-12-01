@@ -10,8 +10,6 @@ import 'gun/lib/radisk.js';
 import 'gun/lib/store.js';
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import asyncStore from 'gun/lib/ras.js';
-import { WithLocalSvg } from 'react-native-svg';
-import FOOTPRINT from '../assets/logo.svg'
 import DesignButton from '../Components/DesignButton'
 
 
@@ -106,8 +104,8 @@ function Main({navigation}) {
     </View>
     <TextInput  style={styles.input1} type="text" placeholder="ID" name="alias" value={userForm.alias} onChangeText={(e) => onChangeHandler("alias", e)}/>
     <TextInput  style={styles.input2} type="password" placeholder="Password" value={userForm.password} name="password" secureTextEntry={true} onChangeText={(e) => onChangeHandler("password", e)}/>
-    <DesignButton text="Login" disabled={!((userForm.alias).length > 0 && (userForm.password).length > 5)} buttonFunction={() =>loginBtn()} width="60%" height="6%" bgcolor="white" color={"black"} outline={false} />
-    <DesignButton text="SignUp" disabled={!((userForm.alias).length > 0 && (userForm.password).length > 5)} buttonFunction={() => signUpBtn()} width="60%" height="6%" bgcolor="white" color={"black"} outline={false} />
+    <DesignButton text="Login" disabled={!((userForm.alias).length > 0 && (userForm.password).length > 5)} buttonFunction={() =>loginBtn()} width="60%" height={40} bgcolor="white" color={"black"} outline={false} />
+    <DesignButton text="SignUp" disabled={!((userForm.alias).length > 0 && (userForm.password).length > 5)} buttonFunction={() => signUpBtn()} width="60%" height={40} bgcolor="white" color={"black"} outline={false} />
   </View>
   </KeyboardAvoidingView>
     

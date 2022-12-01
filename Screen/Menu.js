@@ -20,27 +20,31 @@ function Menu({route,navigation}){
         tabBarActiveTintColor:"green",
         tabBarInActiveTintColor:"green",
         tabBarStyle:{
+            tabBarLabel: () => null,
             height: 60,
             backgroundColor:'#6c7bb8',
-            showLabel:false
         },
-        tabBarIcon: ({ color, size }) => {
+        tabBarShowLabel: false,
+        tabBarIcon: ({ activecolor, color, size,focused }) => {
             let iconName;
             if (route.name === 'Ready') {
                 iconName ='chatbubble-ellipses-outline';
-                color="black"
+                color='black'
+                activecolor='white'
                 size=30
             } else if (route.name === 'Notification') {
                 iconName ='notifications-outline';
                 color="black"
+                activecolor='white'
                 size=30
             }
             else if (route.name === 'User') {
                 iconName = 'person-circle-outline';
                 color="black"
+                activecolor='white'
                 size=30
             }
-        return <Ionicons name={iconName} size={size} color={color} />
+        return <Ionicons name={iconName} size={size} color={focused ? activecolor:color} />
         }}
     )}>
 

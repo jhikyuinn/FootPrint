@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { Header } from 'react-native-elements';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import axios from 'axios';
-import List from './list';
+import HistoryList from './historylist';
 
 //gunDB
 import "gun/lib/mobile.js";
@@ -18,7 +18,6 @@ import 'gun/lib/radisk.js';
 import 'gun/lib/store.js';
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import asyncStore from "gun/lib/ras.js";
-import cons from 'gun';
 
 Gun({ store: asyncStore({ AsyncStorage }) })
 
@@ -42,26 +41,22 @@ function Ready({alias,password,pair,navigation}){
     useEffect(() => {
         authUser()
         history()
-        {"🧑🔴"+console.log(roomenterinfo)}
+        console.log(roomenterinfo)
     }, [])
 
     const history=()=>{
       axios.get(`http://203.247.240.236:1206/api/queryallrecords`, {
         }).then((res) => {
+          const Roomhistory=[]
             res.data.map((records) => {
-            {records.Record.PostID === alias  ?
-              setRoomenterInfo({
-                ...roomenterinfo,
-                enterroompostID:records.Record.PostID,
-                enterroomnumber:records.Record.RoomNumber,
-            })
-              :
+            {records.Record.PostID === alias && records.Record.Function==="enter"?
+              Roomhistory.push([records.Record.PostID,records.Record.RoomNumber]):
               <></>
             }
+            setRoomenterInfo(Roomhistory)
+            })
           })
-          
-        })
-    }
+        }
   
     const authUser = () => 
       new Promise((resolve, reject) => {
@@ -102,13 +97,13 @@ function Ready({alias,password,pair,navigation}){
               <Ionicons name="search-outline" size={35} color={"black"}/>
           </TouchableOpacity>
           </View>
-          <View style={{marginTop:"10%",width:"90%"}}>
+          <View style={{marginTop:"12%",width:"90%"}}>
             <Text style={styles.Textsize3}>History </Text>
             <ScrollView style={{marginBottom:"18%",height:"70%"}}>
               {roomenterinfo && <Text>roomenterinfo.enterroomnumber</Text>!==""?
               <>
               {console.log("→"+JSON.stringify(roomenterinfo))}
-              {Object.values(roomenterinfo).map((value,idx) => (<>{console.log("😊"+value)}<List key={idx} value={value} navigation={navigation}/></>))}
+              {Object.values(roomenterinfo).map((value,idx) => (<>{console.log("😊"+value)}<HistoryList key={idx} value={value} navigation={navigation} alias={alias} pair={pair} /></>))}
               </>:
               <> </>
             }
