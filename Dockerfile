@@ -22,12 +22,11 @@ RUN mkdir /opt/client
 WORKDIR /opt/client
 ENV PATH /opt/client/.bin:$PATH
 COPY . .
-RUN npm install  --legacy-peer-deps
+RUN npm install --force && npm install -g expo-cli --force
 
 # copy in our source code last, as it changes the most
 WORKDIR /opt/client/app
 # for development, we bind mount volumes; comment out for production
-ENTRYPOINT ["npm", "run"]
-CMD ["web"]
+CMD ["npm", "start"]
 
 

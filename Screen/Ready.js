@@ -45,12 +45,13 @@ function Ready({alias,password,pair,navigation}){
     }, [])
 
     const history=()=>{
-      axios.get(`http://203.247.240.236:1206/api/queryallrecords`, {
+      axios.get(`http://203.247.240.236:1206/api/query/${roomnumber}`, {
         }).then((res) => {
-          const Roomhistory=[]
+          const Roomhistory=[] 
             res.data.map((records) => {
-            {records.Record.PostID === alias && records.Record.Function==="enter"?
-              Roomhistory.push([records.Record.PostID,records.Record.RoomNumber]):
+              console.log(records.Value.postid)
+            {records.Value.postid === alias && records.Value.function==="enter"?
+              Roomhistory.push([records.Value.postid,records.Value.roomnumber]):
               <></>
             }
             setRoomenterInfo(Roomhistory)
@@ -100,13 +101,14 @@ function Ready({alias,password,pair,navigation}){
           <View style={{marginTop:"12%",width:"90%"}}>
             <Text style={styles.Textsize3}>History </Text>
             <ScrollView style={{marginBottom:"18%",height:"70%"}}>
-              {roomenterinfo && <Text>roomenterinfo.enterroomnumber</Text>!==""?
+            <HistoryList key="qq" value="dd" navigation={navigation} alias={alias} pair={pair} /> 
+              {/* {roomenterinfo && <Text>roomenterinfo.enterroomnumber</Text>!==""?
               <>
               {console.log("→"+JSON.stringify(roomenterinfo))}
               {Object.values(roomenterinfo).map((value,idx) => (<>{console.log("😊"+value)}<HistoryList key={idx} value={value} navigation={navigation} alias={alias} pair={pair} /></>))}
               </>:
-              <> </>
-            }
+              <><HistoryList key={idx} value="dd" navigation={navigation} alias={alias} pair={pair} /> </>
+            } */}
             </ScrollView>
           </View>
         </View>
