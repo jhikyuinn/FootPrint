@@ -4,58 +4,70 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import axios from 'axios';
 import common, { colors } from '../lib/styles';
 
+// One room of the room list: props.room = { name, host }
 const HistoryList = (props) => {
 
-    console.log("🎅"+JSON.stringify(props)+"🎅")
-
     const EntranceBtn=()=>{
-        axios.get(`http://localhost:1206/api/history/Graduate`, {
-        }).then((res) => {
-            const Roomhistory=[]
-            res.data.map((records)=>{
-                Roomhistory.push([records.Value.roomnumber,records.Value.function,records.Value.hostid,records.Value.postid,records.Value.hash,records.Value.datetime,])
-            })
-//             window.alert(`
-//             1 Record. 
-//             TxId:db843562348708854ce85992f3088d33c6442fb4acbd3792f3a4782344efa215,
-// Function: create,
-// Hostid: james,
-// Postid: james,
-// Hash: 4ea5c508a6566e76240543f8feb06fd457777be39549c4016436afda65d2330e,
-// Datetime: thu nov 24 2022 23:53:00 gmt+0900 (kst) 
+        props.navigation.navigate("Chat", {
+            alias:props.alias,
+            roomState: {"RoomState":props.room.name},
+            pair: props.pair
+        });
+    }
 
-//             2 Record.
-//             TxId:a8048d7481103f33814008aef81303f29ed4c3b753ebde1ae0110438bb335b17,
-// Function: enter,
-// Hostid: james,
-// Postid: kyu,
-// Hash: d9207d7ebd7c9a7e24728a610ac77a94bc7ebaaa8bdb11473ca76e3fd69ff739,
-// Datetime: fri nov 25 2022 00:01:08 gmt+0900 (kst)  
-//             `)
+    // every record the ledger holds for this room
+    const RecordBtn=()=>{
+        axios.get(`http://localhost:1206/api/history/${props.room.name}`, {
+        }).then((res) => {
+            if(res.data.length === 0) {
+                alert("No ledger records for " + props.room.name);
+                return;
+            }
+            const Roomhistory=res.data.map((records, idx)=>
+                (idx+1)+" Record.\n"+
+                "TxId: "+records.TxId+"\n"+
+                "Function: "+records.Value.function+"\n"+
+                "Hostid: "+records.Value.hostid+"\n"+
+                "Postid: "+records.Value.postid+"\n"+
+                "Hash: "+records.Value.hash+"\n"+
+                "Datetime: "+records.Value.datetime
+            )
+            alert(Roomhistory.join("\n\n"))
+        }).catch((err) => {
+            alert("Ledger history: "+err.message)
         })
     }
 
     return (
         <>
         <View style={common.card}>
-            <View>
+            <View style={styles.info}>
                 <Text style={common.label}>ROOM</Text>
-                <Text style={[common.alarmText, styles.line]}>Graduate</Text>
+                <Text style={[common.alarmText, styles.line]}>{props.room.name}</Text>
                 <Text style={common.label}>HOST</Text>
-                <Text style={common.alarmText}>James</Text>
+                <Text style={common.alarmText}>{props.room.host || "-"}</Text>
             </View>
-            <TouchableOpacity onPress={() => EntranceBtn(props.value[1])}>
+            <TouchableOpacity style={styles.action} onPress={() => RecordBtn()}>
                 <Ionicons name="receipt-outline" size={28} color={colors.accent}/>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.action} onPress={() => EntranceBtn()}>
+                <Ionicons name="enter-outline" size={30} color={colors.primary}/>
+            </TouchableOpacity>
         </View>
-    </> 
+    </>
     );
 };
 
 export default HistoryList;
 
 const styles = StyleSheet.create({
+    info:{
+        flex:1,
+    },
     line:{
         marginBottom:8,
+    },
+    action:{
+        marginLeft:14,
     },
 });
