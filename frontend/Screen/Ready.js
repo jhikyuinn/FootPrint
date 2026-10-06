@@ -1,27 +1,12 @@
 //react-native
-import WebviewCrypto from 'react-native-webview-crypto';
-import 'react-native-get-random-values';
-
-import { StyleSheet, Text, View, TextInput,KeyboardAvoidingView,TouchableOpacity, ScrollView} from 'react-native';
+import { StyleSheet, Text, View, TextInput,KeyboardAvoidingView,TouchableOpacity, ScrollView, Platform} from 'react-native';
 import { useState, useEffect } from 'react';
 import { Header } from 'react-native-elements';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import axios from 'axios';
 import HistoryList from './historylist';
-
-//gunDB
-import "gun/lib/mobile.js";
-import GUN from 'gun/gun';
-import SEA from 'gun/sea';
-import 'gun/lib/radix.js';
-import 'gun/lib/radisk.js';
-import 'gun/lib/store.js';
-import AsyncStorage from '@react-native-async-storage/async-storage'
-import asyncStore from "gun/lib/ras.js";
-
-Gun({ store: asyncStore({ AsyncStorage }) })
-
-const gun = new Gun('http://203.247.240.236:8765');
+import gun from '../lib/gun';
+import common, { colors } from '../lib/styles';
 
 function Ready({alias,password,pair,navigation}){
     const [roomState, setRoom] = useState("");
@@ -39,26 +24,36 @@ function Ready({alias,password,pair,navigation}){
     }
 
     useEffect(() => {
-        authUser()
+        // Main already logged in; a second auth while one is running makes GUN answer
+        // "User is already being created or authenticated!"
+        if(gun.user().is) {
+          setCurrentAlias(alias);
+        } else {
+          authUser()
+        }
         history()
         console.log(roomenterinfo)
     }, [])
 
+    // rooms this user has entered: every room on the ledger, then the history of each one
     const history=()=>{
-      axios.get(`http://203.247.240.236:1206/api/query/${roomnumber}`, {
-        }).then((res) => {
-          const Roomhistory=[] 
+      axios.get(`http://localhost:1206/api/queryallrecords`).then((res) => {
+        return Promise.all(res.data.map((room) => axios.get(`http://localhost:1206/api/history/${room.Key}`)))
+      }).then((histories) => {
+          const Roomhistory=[]
+          histories.forEach((res) => {
             res.data.map((records) => {
-              console.log(records.Value.postid)
-            {records.Value.postid === alias && records.Value.function==="enter"?
-              Roomhistory.push([records.Value.postid,records.Value.roomnumber]):
-              <></>
-            }
-            setRoomenterInfo(Roomhistory)
+              if(records.Value.postid === alias && records.Value.function==="enter") {
+                Roomhistory.push([records.Value.postid,records.Value.roomnumber])
+              }
             })
           })
-        }
-  
+          setRoomenterInfo(Roomhistory)
+        }).catch((err) => {
+          console.log("history: "+err.message)
+        })
+      }
+
     const authUser = () => 
       new Promise((resolve, reject) => {
           gun.user().auth(alias, password, async res => {
@@ -88,18 +83,18 @@ function Ready({alias,password,pair,navigation}){
     behavior={Platform.OS === "ios" ? "padding" : null}>
 
     <Header
-        backgroundColor='#6c7bb8'
+        backgroundColor={colors.background}
         leftComponent={{text:"Chat Search",style:{width:400,fontSize:35,color:"black"}}}
         />
-        <View style={styles.home} >
-          <View style={styles.row}>
-          <TextInput  style={styles.input} type="text" placeholder="Room Number" value={roomState} name="Roomnumber" onChangeText={(e) => onChangeRoomHandler("RoomState", e)}/>
+        <View style={common.home} >
+          <View style={[common.row, styles.row]}>
+          <TextInput  style={[common.input, styles.input]} type="text" placeholder="Room Number" value={roomState} name="Roomnumber" onChangeText={(e) => onChangeRoomHandler("RoomState", e)}/>
           <TouchableOpacity onPress={() => EntranceBtn()}>
               <Ionicons name="search-outline" size={35} color={"black"}/>
           </TouchableOpacity>
           </View>
           <View style={{marginTop:"12%",width:"90%"}}>
-            <Text style={styles.Textsize3}>History </Text>
+            <Text style={[common.boldText, styles.Textsize3]}>History </Text>
             <ScrollView style={{marginBottom:"18%",height:"70%"}}>
             <HistoryList key="qq" value="dd" navigation={navigation} alias={alias} pair={pair} /> 
               {/* {roomenterinfo && <Text>roomenterinfo.enterroomnumber</Text>!==""?
@@ -119,57 +114,22 @@ export default Ready;
 
 
 const styles = StyleSheet.create({
-    home:{
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor:"#6c7bb8",
-      width:"100%",
-      height:"100%"
-    },
-    Textsize1:{
-      fontSize:40,
-      color:"white",
-      fontWeight: 'bold'
-    },
-    Textsize2:{
-      fontSize:18,
-      marginBottom:"3%",
-      color:"black",
-      fontWeight: 'bold'
-    },
     Textsize3:{
       marginTop:"10%",
       marginBottom:"5%",
       fontSize:20,
-      justifyContent:"flex-start",
-      alignItems:"flex-start",
-      color:"black",
-      fontWeight: 'bold'
     },
-    alarm:{
-      width:"90%",
-      height:130,
-      borderBottomWidth: 2,
-      padding: 10,
-  },
     input: {
       backgroundColor:"white",
       borderBottomWidth: 2,
       borderStyle: 'solid',
       width:"80%",
-      height:40,
-      marginRight:10,
-      padding: 10,
-      borderRadius:10,
       marginBottom:10,
     },
-    row:{ 
+    row:{
       position:"absolute",
       top:"5%",
       width:"80%",
-      flexDirection:"row",
-      flexWrap: "wrap",
-      alignItems: "center",
       justifyContent: "center",
     },
   });
