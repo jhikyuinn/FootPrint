@@ -2,27 +2,30 @@ import React, {useEffect,useState} from 'react';
 import {Platform, View ,StyleSheet} from 'react-native';
 import 'react-native-gesture-handler';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import Ready from './Ready';
 import Notification from './Notification';
 import User from './User';
+import { colors } from '../lib/styles';
+
+// created once: a navigator created during render remounts every tab on each render
+const Tab = createBottomTabNavigator();
 
 function Menu({route,navigation}){
     const {alias}=route.params
     const {pair}=route.params
     const {password}=route.params
-    const Tab = createBottomTabNavigator();
 
     return(
     <>
     <Tab.Navigator initialRouteName="Ready" screenOptions={({route }) => ({
         headerShown: false,
         tabBarActiveTintColor:"green",
-        tabBarInActiveTintColor:"green",
+        tabBarInactiveTintColor:"green",
         tabBarStyle:{
             tabBarLabel: () => null,
             height: 60,
-            backgroundColor:'#6c7bb8',
+            backgroundColor:colors.background,
         },
         tabBarShowLabel: false,
         tabBarIcon: ({ activecolor, color, size,focused }) => {

@@ -1,28 +1,14 @@
 import React, {useState,useEffect,useReducer} from 'react';
 import CryptoJS from "crypto-js";
 import axios from 'axios';
-import Ionicons from 'react-native-vector-icons/Ionicons';
-import {Modal, View, Text,TextInput,StyleSheet,ScrollView, KeyboardAvoidingView, ActivityIndicator} from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import {Modal, View, Text,TextInput,StyleSheet,ScrollView, KeyboardAvoidingView, ActivityIndicator, Platform} from 'react-native';
 import { Header, withTheme } from 'react-native-elements';
 import { TouchableOpacity } from 'react-native';
 
-import WebviewCrypto from 'react-native-webview-crypto';
-import 'react-native-get-random-values';
-import "gun/lib/mobile.js";
-import GUN from 'gun/gun';
-import SEA from 'gun/sea';
-import 'gun/lib/radix.js';
-import 'gun/lib/radisk.js';
-import 'gun/lib/store.js';
-import AsyncStorage from '@react-native-async-storage/async-storage'
-import asyncStore from 'gun/lib/ras.js';
-
 import Message from '../Components/Message';
-
-
-Gun({ store: asyncStore({ AsyncStorage }) })
-
-const gun = new Gun('http://203.247.240.236:8765/gun');
+import gun, { SEA } from '../lib/gun';
+import common, { colors } from '../lib/styles';
 
 const initialState = {
   messages: [],
@@ -138,12 +124,12 @@ function Chat({route,navigation}){
     })
     const hash=CryptoJS.SHA256(JSON.stringify(hashmessage)).toString()
       //개설되어있는 방인지 확인
-    axios.get(`http://203.247.240.236:1206/api/query/${roomState.RoomState}`).then((res) => {
+    axios.get(`http://localhost:1206/api/query/${roomState.RoomState}`).then((res) => {
       console.log(res.data)
       console.log(hash)
       //처음 개설되는 방 저장(방 이름, 방 개설, 호스트 이름, 입장한 이름, 당시 해시값, 저장 시간)
         if(res.data=="None"){
-          axios.post(`http://203.247.240.236:1206/api/recordhash`, {
+          axios.post(`http://localhost:1206/api/recordhash`, {
             "RoomNumber":roomState.RoomState,
             "Function":"create",
             "HostID": alias,
@@ -157,7 +143,7 @@ function Chat({route,navigation}){
         //이미 개설되어있는 방 입장하면서 저장(방 이름, 방 입장, 호스트 이름, 입장한 이름, 당시 해시값, 저장 시간)
         else{
           if(res.data.Hash!==hash){
-          axios.post(`http://203.247.240.236:1206/api/recordhash`, {
+          axios.post(`http://localhost:1206/api/recordhash`, {
             "RoomNumber":roomState.RoomState,
             "Function":"enter",
             "HostID": res.data.HostID,
@@ -204,11 +190,11 @@ function Chat({route,navigation}){
     const hash=CryptoJS.SHA256(JSON.stringify(hashmessage)).toString() 
       //그 전의 메세지들의 해쉬값(블록체인에 저장되어있는 해쉬값)
       //그전의 메세지와 현대 메세지가 동일할경우, 그전의 메세지의 값이 존재하지 않는 경우 트랜잭션 발생
-      axios.get(`http://203.247.240.236:1206/api/query/${roomState.RoomState}`).then((res) => {
+      axios.get(`http://localhost:1206/api/query/${roomState.RoomState}`).then((res) => {
         if(res.data.Hash==hash){
           alert("Same Hash is already recorded");
         }else{
-          axios.post(`http://203.247.240.236:1206/api/recordhash`, {
+          axios.post(`http://localhost:1206/api/recordhash`, {
                 "RoomNumber":roomState.RoomState,
                 "Function":"record",
                 "HostID": res.data.HostID,
@@ -232,7 +218,7 @@ function Chat({route,navigation}){
       }
     })
     const hash=CryptoJS.SHA256(JSON.stringify(hashmessage)).toString()
-        axios.get(`http://203.247.240.236:1206/api/query/${roomState.RoomState}`).then((res) => {
+        axios.get(`http://localhost:1206/api/query/${roomState.RoomState}`).then((res) => {
           alert("✏️ "+res.data.PostID +" Recorded Hash at "+res.data.DateTime+"\n"+res.data.Hash+" \n  \n 🔎 Now Hash \n"+hash)
         })
     }
@@ -246,8 +232,8 @@ function Chat({route,navigation}){
     }
 
     const Invitation=(invitationuser)=>{
-      axios.get(`http://203.247.240.236:1206/api/query/${roomState.RoomState}`).then((res) => {
-        axios.post(`http://203.247.240.236:1206/api/recordhash`, {
+      axios.get(`http://localhost:1206/api/query/${roomState.RoomState}`).then((res) => {
+        axios.post(`http://localhost:1206/api/recordhash`, {
           "RoomNumber":roomState.RoomState,
           "Function":"invitation",
           "HostID": res.data.HostID,
@@ -271,7 +257,7 @@ function Chat({route,navigation}){
 
     return(
       
-      <View style={styles.home}>
+      <View style={common.home}>
         <KeyboardAvoidingView 
           style = {{ flex: 0.99 }}
           behavior={Platform.OS === "ios" ? "padding" : null}>
@@ -285,19 +271,19 @@ function Chat({route,navigation}){
               <Ionicons name="list-outline" size={25} color="black" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.rowicon} onPress={() => onHashMessage()}>
-              <Ionicons name="save-outline" size={30} color="black"/><Text style={styles.Textsize}> Record Hash {"\n"}</Text>
+              <Ionicons name="save-outline" size={30} color="black"/><Text style={[common.boldText, styles.Textsize]}> Record Hash {"\n"}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.rowicon} onPress={() => onQueryHash()}>
-              <Ionicons name="checkbox-outline" size={30} color="black" /><Text style={styles.Textsize}>  Check Hash{"\n"}</Text>
+              <Ionicons name="checkbox-outline" size={30} color="black" /><Text style={[common.boldText, styles.Textsize]}>  Check Hash{"\n"}</Text>
             </TouchableOpacity>
-            <View style={styles.row}>
-              <TextInput  style={styles.input} type="text" value={invitationuser} placeholder="Invitation" name="Invitation" onChangeText={invitationuser => setInvitationuser(invitationuser)}/>
+            <View style={[common.row, styles.row]}>
+              <TextInput  style={[common.input, styles.input]} type="text" value={invitationuser} placeholder="Invitation" name="Invitation" onChangeText={invitationuser => setInvitationuser(invitationuser)}/>
               <TouchableOpacity onPress={() => Invitation(invitationuser)}>
                 <Ionicons name="mail-outline" size={35} color={"black"}/>
               </TouchableOpacity>
           </View>
           <Text style={{fontSize:25,marginBottom:"5%"}}>User</Text>
-            {userList.map(user => <View style={styles.row}><Ionicons name="person-circle-outline" size={25} color={alias==user?"white":"black"} /><Text> {user}</Text></View>)}
+            {userList.map(user => <View style={[common.row, styles.row]}><Ionicons name="person-circle-outline" size={25} color={alias==user?"white":"black"} /><Text> {user}</Text></View>)}
           </View>
         </Modal>
         
@@ -318,7 +304,7 @@ function Chat({route,navigation}){
                       </View>
                   ))}
               </ScrollView>
-              <View style={styles.row}>
+              <View style={[common.row, styles.row]}>
                   <TextInput style={styles.Chatinput} type="text" placeholder="My message" value={messageState} onChangeText={(e) => onChange("messageState",e)}/>
                   <TouchableOpacity onPress={()=> saveMessage()}>
                     <Ionicons name="send" size={30} color="black"></Ionicons>
@@ -342,15 +328,8 @@ const styles = StyleSheet.create({
     right:0,
     width:"60%",
     height:"100%",
-    backgroundColor:"#c7cff0",
+    backgroundColor:colors.panel,
     padding:5
-  },
-  home:{
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor:"#6c7bb8",
-    width:"100%",
-    height:"100%"
   },
   main:{
     marginTop:"2%",
@@ -358,25 +337,8 @@ const styles = StyleSheet.create({
     height:"85%",
     width:"98%",
   },
-  addtext:{
-    fontSize:8,
-    color:"darkgrey",
-  },
-  messages:{ 
-    marginTop:"2%",
-  },
   Textsize:{
     fontSize:20,
-    color:"black",
-    fontWeight: 'bold'
-  },
-  Roominput:{
-    width:"80%",
-    height:"10%",
-    marginLeft:"4%",
-    marginRight:"4%",
-    borderWidth: 1,
-    padding: 10,
   },
   Chatinput:{
     width:"86%",
@@ -389,18 +351,13 @@ const styles = StyleSheet.create({
     borderColor:"white",
     backgroundColor:"white",
     },
-    row:{ 
+    row:{
       marginBottom:"1%",
-      backgroundColor:"rgba(23,36,65,00)",
-      flexDirection:"row",
-      flexWrap: "wrap",
-      alignItems: "center",
       padding: 2,
     },
-    rowicon:{ 
+    rowicon:{
       marginTop:"3%",
       width:180,
-      backgroundColor:"rgba(23,36,65,00)",
       flexDirection:"row",
       flexWrap: "wrap",
       justifyContent: "center",
@@ -408,12 +365,7 @@ const styles = StyleSheet.create({
     },
     input: {
       backgroundColor:"white",
-      borderStyle: 'solid',
       width:"70%",
-      height:40,
-      marginRight:10,
-      padding: 10,
-      borderRadius:10,
       marginBottom:10,
     },
   });

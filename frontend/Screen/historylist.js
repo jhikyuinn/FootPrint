@@ -1,14 +1,15 @@
 import React from 'react';
 import { StyleSheet, Text, View, TextInput,KeyboardAvoidingView,TouchableOpacity, ScrollView} from 'react-native';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import axios from 'axios';
+import common from '../lib/styles';
 
 const HistoryList = (props) => {
 
     console.log("🎅"+JSON.stringify(props)+"🎅")
 
     const EntranceBtn=()=>{
-        axios.get(`http://203.247.240.236:1206/api/query/Graduate`, {
+        axios.get(`http://localhost:1206/api/history/Graduate`, {
         }).then((res) => {
             const Roomhistory=[]
             res.data.map((records)=>{
@@ -36,9 +37,9 @@ const HistoryList = (props) => {
 
     return (
         <>
-        <View style={styles.alarm}>
-            <Ionicons name="trail-sign-outline" size={18} color={"black"}/><Text style={styles.Textsize2}>Room : Graduate</Text>
-            <Ionicons name="people-outline" size={18} color={"black"}/><Text style={styles.Textsize2}>Host : James</Text>
+        <View style={[common.alarm, styles.alarm]}>
+            <Ionicons name="trail-sign-outline" size={18} color={"black"}/><Text style={common.alarmText}>Room : Graduate</Text>
+            <Ionicons name="people-outline" size={18} color={"black"}/><Text style={common.alarmText}>Host : James</Text>
             <TouchableOpacity onPress={() => EntranceBtn(props.value[1])} style={{marginLeft:"80%"}}>
                 <Ionicons name="receipt-outline" size={35} color={"black"}/>
             </TouchableOpacity>
@@ -50,16 +51,7 @@ const HistoryList = (props) => {
 export default HistoryList;
 
 const styles = StyleSheet.create({
-    Textsize2:{
-        fontSize:18,
-        marginBottom:"3%",
-        color:"black",
-        fontWeight: 'bold'
-    },
     alarm:{
-        width:"100%",
         height:160,
-        borderBottomWidth: 2,
-        padding: 10,
     },
 });
