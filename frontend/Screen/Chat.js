@@ -8,7 +8,7 @@ import { TouchableOpacity } from 'react-native';
 
 import Message from '../Components/Message';
 import gun, { SEA } from '../lib/gun';
-import common, { colors } from '../lib/styles';
+import common, { colors, fonts } from '../lib/styles';
 
 const initialState = {
   messages: [],
@@ -259,7 +259,7 @@ function Chat({route,navigation}){
       
       <View style={common.home}>
         <KeyboardAvoidingView 
-          style = {{ flex: 0.99 }}
+          style = {{ flex: 1, width: "100%" }}
           behavior={Platform.OS === "ios" ? "padding" : null}>
         <Modal
           useNativeDriver={true}
@@ -267,47 +267,59 @@ function Chat({route,navigation}){
           visible={isModalVisible}
         >
           <View style={styles.modalview}>
-            <TouchableOpacity style={{marginBottom:"10%"}} onPress={() => modalopen()}>
-              <Ionicons name="list-outline" size={25} color="black" />
+            <TouchableOpacity style={{marginBottom:20}} onPress={() => modalopen()}>
+              <Ionicons name="close-outline" size={28} color={colors.text} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.rowicon} onPress={() => onHashMessage()}>
-              <Ionicons name="save-outline" size={30} color="black"/><Text style={[common.boldText, styles.Textsize]}> Record Hash {"\n"}</Text>
+              <Ionicons name="save-outline" size={24} color={colors.accent}/><Text style={[common.boldText, styles.Textsize]}>Record Hash</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.rowicon} onPress={() => onQueryHash()}>
-              <Ionicons name="checkbox-outline" size={30} color="black" /><Text style={[common.boldText, styles.Textsize]}>  Check Hash{"\n"}</Text>
+              <Ionicons name="checkbox-outline" size={24} color={colors.accent} /><Text style={[common.boldText, styles.Textsize]}>Check Hash</Text>
             </TouchableOpacity>
-            <View style={[common.row, styles.row]}>
-              <TextInput  style={[common.input, styles.input]} type="text" value={invitationuser} placeholder="Invitation" name="Invitation" onChangeText={invitationuser => setInvitationuser(invitationuser)}/>
+            <View style={styles.inviteRow}>
+              <TextInput  style={[common.input, styles.input]} type="text" value={invitationuser} placeholder="Invitation" placeholderTextColor={colors.subtext} name="Invitation" onChangeText={invitationuser => setInvitationuser(invitationuser)}/>
               <TouchableOpacity onPress={() => Invitation(invitationuser)}>
-                <Ionicons name="mail-outline" size={35} color={"black"}/>
+                <Ionicons name="mail-outline" size={30} color={colors.primary}/>
               </TouchableOpacity>
           </View>
-          <Text style={{fontSize:25,marginBottom:"5%"}}>User</Text>
-            {userList.map(user => <View style={[common.row, styles.row]}><Ionicons name="person-circle-outline" size={25} color={alias==user?"white":"black"} /><Text> {user}</Text></View>)}
+          <Text style={styles.sectionTitle}>User</Text>
+            {userList.map(user => <View style={[common.row, styles.row]}><Ionicons name={alias==user?"person-circle":"person-circle-outline"} size={25} color={alias==user?colors.primary:colors.subtext} /><Text style={{color:colors.text}}> {user}</Text></View>)}
           </View>
         </Modal>
-        
-        
+
+
           <Header
-          backgroundColor='rgba(23,36,65,0)'
-          leftComponent={<TouchableOpacity onPress={Back}><Ionicons name="chevron-back-outline" size={35} color="black" /></TouchableOpacity>}
-          centerComponent={{ text:roomState.RoomState,style:{width:220,fontSize:28,fontWeight:'bold',color:"black"}}}
+          backgroundColor={colors.surface}
+          containerStyle={{borderBottomColor:colors.border}}
+          leftComponent={<TouchableOpacity onPress={Back}><Ionicons name="chevron-back-outline" size={30} color={colors.text} /></TouchableOpacity>}
+          centerComponent={{ text:roomState.RoomState,style:{width:220,textAlign:'center',fontSize:20,fontWeight:'bold',fontFamily:fonts.serif,color:colors.text}}}
           rightComponent={<TouchableOpacity onPress={() => modalopen()}>
-                            <Ionicons name="list-outline" size={25} color="black" />
+                            <Ionicons name="list-outline" size={26} color={colors.text} />
                           </TouchableOpacity>}
           />
           <View style={styles.main}>
-              <ScrollView removeClippedSubviews={true} overScrollMode="never">
+              <View style={styles.recordBar}>
+                <Text style={common.label}>LEDGER</Text>
+                <View style={{flexDirection:"row"}}>
+                  <TouchableOpacity style={styles.recordBtn} onPress={() => onHashMessage()}>
+                    <Ionicons name="save-outline" size={14} color={colors.accent}/><Text style={styles.recordText}>RECORD</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.recordBtn} onPress={() => onQueryHash()}>
+                    <Ionicons name="checkbox-outline" size={14} color={colors.accent}/><Text style={styles.recordText}>CHECK</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <ScrollView removeClippedSubviews={true} overScrollMode="never" contentContainerStyle={styles.messages}>
                   {state.messages.map((message, createdAt) => (
                       <View  key={createdAt}>
                           <Message message={message} name={alias}/>
                       </View>
                   ))}
               </ScrollView>
-              <View style={[common.row, styles.row]}>
-                  <TextInput style={styles.Chatinput} type="text" placeholder="My message" value={messageState} onChangeText={(e) => onChange("messageState",e)}/>
-                  <TouchableOpacity onPress={()=> saveMessage()}>
-                    <Ionicons name="send" size={30} color="black"></Ionicons>
+              <View style={styles.inputBar}>
+                  <TextInput style={styles.Chatinput} type="text" placeholder="My message" placeholderTextColor={colors.subtext} value={messageState} onChangeText={(e) => onChange("messageState",e)}/>
+                  <TouchableOpacity style={styles.sendBtn} onPress={()=> saveMessage()}>
+                    <Ionicons name="send" size={20} color={colors.background}></Ionicons>
                   </TouchableOpacity>
               </View>
           </View>
@@ -322,51 +334,116 @@ export default Chat;
 
 const styles = StyleSheet.create({
   modalview:{
-    borderTopLeftRadius:10,
-    borderBottomLeftRadius:10,
+    borderTopLeftRadius:20,
+    borderBottomLeftRadius:20,
     position:"absolute",
     right:0,
-    width:"60%",
+    width:"70%",
     height:"100%",
     backgroundColor:colors.panel,
-    padding:5
+    borderLeftWidth:1,
+    borderColor:colors.border,
+    paddingHorizontal:20,
+    paddingTop:50,
+    shadowColor:"#000",
+    shadowOpacity:0.15,
+    shadowRadius:12,
+    shadowOffset:{width:-4,height:0},
+    elevation:12,
   },
   main:{
-    marginTop:"2%",
-    marginLeft:"2%",
-    height:"85%",
-    width:"98%",
+    flex:1,
+    width:"100%",
+  },
+  messages:{
+    paddingHorizontal:14,
+    paddingTop:14,
+  },
+  // the two ledger actions, always visible above the conversation
+  recordBar:{
+    flexDirection:"row",
+    alignItems:"center",
+    justifyContent:"space-between",
+    paddingHorizontal:14,
+    paddingVertical:8,
+    backgroundColor:colors.primarySoft,
+    borderBottomWidth:1,
+    borderColor:colors.border,
+  },
+  recordBtn:{
+    flexDirection:"row",
+    alignItems:"center",
+    marginLeft:8,
+    paddingHorizontal:10,
+    paddingVertical:5,
+    borderRadius:4,
+    borderWidth:1,
+    borderColor:colors.accent,
+    backgroundColor:colors.surface,
+  },
+  recordText:{
+    fontFamily:fonts.mono,
+    fontSize:11,
+    letterSpacing:1,
+    marginLeft:5,
+    color:colors.accent,
   },
   Textsize:{
-    fontSize:20,
+    fontSize:18,
+    marginLeft:12,
+  },
+  sectionTitle:{
+    fontSize:14,
+    fontWeight:'600',
+    color:colors.subtext,
+    marginTop:24,
+    marginBottom:10,
+  },
+  inputBar:{
+    flexDirection:"row",
+    alignItems:"center",
+    paddingHorizontal:12,
+    paddingTop:8,
+    // keeps the bar above the ios home indicator
+    paddingBottom:Platform.OS === "ios" ? 24 : 8,
+    backgroundColor:colors.surface,
+    borderTopWidth:1,
+    borderColor:colors.border,
   },
   Chatinput:{
-    width:"86%",
-    height:"98%",
-    marginLeft:"1%",
-    marginRight:"2%",
-    borderWidth: 1,
-    borderRadius:10,
-    padding: 10,
-    borderColor:"white",
-    backgroundColor:"white",
+    flex:1,
+    height:44,
+    marginRight:10,
+    borderRadius:22,
+    paddingHorizontal:16,
+    fontSize:15,
+    color:colors.text,
+    backgroundColor:colors.background,
     },
+  sendBtn:{
+    width:44,
+    height:44,
+    borderRadius:22,
+    backgroundColor:colors.primary,
+    alignItems:"center",
+    justifyContent:"center",
+  },
     row:{
-      marginBottom:"1%",
-      padding: 2,
+      marginBottom:8,
     },
     rowicon:{
-      marginTop:"3%",
-      width:180,
       flexDirection:"row",
-      flexWrap: "wrap",
-      justifyContent: "center",
-      padding: 2,
+      alignItems:"center",
+      paddingVertical:12,
+    },
+    inviteRow:{
+      flexDirection:"row",
+      alignItems:"center",
+      marginTop:12,
     },
     input: {
-      backgroundColor:"white",
-      width:"70%",
-      marginBottom:10,
+      flex:1,
+      marginRight:10,
     },
   });
 

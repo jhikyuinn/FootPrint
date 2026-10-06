@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View, TextInput,KeyboardAvoidingView,TouchableOpacity, ScrollView} from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import axios from 'axios';
-import common from '../lib/styles';
+import common, { colors } from '../lib/styles';
 
 const HistoryList = (props) => {
 
@@ -37,13 +37,17 @@ const HistoryList = (props) => {
 
     return (
         <>
-        <View style={[common.alarm, styles.alarm]}>
-            <Ionicons name="trail-sign-outline" size={18} color={"black"}/><Text style={common.alarmText}>Room : Graduate</Text>
-            <Ionicons name="people-outline" size={18} color={"black"}/><Text style={common.alarmText}>Host : James</Text>
-            <TouchableOpacity onPress={() => EntranceBtn(props.value[1])} style={{marginLeft:"80%"}}>
-                <Ionicons name="receipt-outline" size={35} color={"black"}/>
+        <View style={common.card}>
+            <View>
+                <Text style={common.label}>ROOM</Text>
+                <Text style={[common.alarmText, styles.line]}>Graduate</Text>
+                <Text style={common.label}>HOST</Text>
+                <Text style={common.alarmText}>James</Text>
+            </View>
+            <TouchableOpacity onPress={() => EntranceBtn(props.value[1])}>
+                <Ionicons name="receipt-outline" size={28} color={colors.accent}/>
             </TouchableOpacity>
-        </View> 
+        </View>
     </> 
     );
 };
@@ -51,7 +55,7 @@ const HistoryList = (props) => {
 export default HistoryList;
 
 const styles = StyleSheet.create({
-    alarm:{
-        height:160,
+    line:{
+        marginBottom:8,
     },
 });

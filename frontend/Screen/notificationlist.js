@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View, TextInput,KeyboardAvoidingView,TouchableOpacity, ScrollView} from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import common from '../lib/styles';
+import common, { colors } from '../lib/styles';
 
 const NotificationList = (props) => {
 
@@ -15,13 +15,17 @@ const NotificationList = (props) => {
 
     return (
         <>
-        <View style={[common.alarm, styles.alarm]}>
-            <Ionicons name="trail-sign-outline" size={18} color={"black"}/><Text style={common.alarmText}>Room : {props.value[1]}</Text>
-            <Ionicons name="people-outline" size={18} color={"black"}/><Text style={common.alarmText}>Host : {props.value[0]}</Text>
-            <TouchableOpacity onPress={() => EntranceBtn(props.value[1])} style={{marginLeft:"80%"}}>
-                <Ionicons name="enter-outline" size={35} color={"black"}/>
+        <View style={common.card}>
+            <View>
+                <Text style={common.label}>INVITED TO ROOM</Text>
+                <Text style={[common.alarmText, styles.line]}>{props.value[1]}</Text>
+                <Text style={common.label}>HOST</Text>
+                <Text style={common.alarmText}>{props.value[0]}</Text>
+            </View>
+            <TouchableOpacity onPress={() => EntranceBtn(props.value[1])}>
+                <Ionicons name="enter-outline" size={30} color={colors.primary}/>
             </TouchableOpacity>
-        </View> 
+        </View>
     </> 
     );
 };
@@ -29,7 +33,7 @@ const NotificationList = (props) => {
 export default NotificationList;
 
 const styles = StyleSheet.create({
-    alarm:{
-        height:180,
+    line:{
+        marginBottom:8,
     },
 });

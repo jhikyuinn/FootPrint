@@ -1,10 +1,10 @@
 //react-native
-import { Text, View, TouchableOpacity,KeyboardAvoidingView, Touchable, Platform } from 'react-native';
+import { Text, View, TouchableOpacity,KeyboardAvoidingView, Touchable, Platform, ScrollView } from 'react-native';
 import { useState, useEffect } from 'react';
 import { Header } from 'react-native-elements';
 import axios from 'axios';
 import NotificationList from './notificationlist';
-import { colors } from '../lib/styles';
+import common, { colors } from '../lib/styles';
 
 function Notification({alias,password,pair,navigation}){
     const [roomState, setRoom] = useState("");
@@ -41,8 +41,10 @@ function Notification({alias,password,pair,navigation}){
 
     <Header
         backgroundColor={colors.background}
-        leftComponent={{text:"Notification",style:{width:250,fontSize:35,color:"black"}}}
+        containerStyle={common.header}
+        leftComponent={{text:"Notification",style:common.headerTitle}}
         />
+        <ScrollView contentContainerStyle={{paddingHorizontal:20,paddingTop:8}}>
         {roomenterinfo && <Text>roomenterinfo.enterroomnumber</Text>!==""?
               <>
               {console.log("→"+JSON.stringify(roomenterinfo))}
@@ -50,6 +52,7 @@ function Notification({alias,password,pair,navigation}){
               </>:
               <> </>
             }
+        </ScrollView>
       </KeyboardAvoidingView>
 )
 }
