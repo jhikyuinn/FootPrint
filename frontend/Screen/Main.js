@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import DesignButton from '../Components/DesignButton'
 import gun from '../lib/gun';
-import common from '../lib/styles';
+import Logo from '../Components/Logo';
+import common, { colors, fonts } from '../lib/styles';
 
 const timer = () => {
   let current = Date.now();
@@ -156,14 +157,15 @@ function Main({navigation}) {
     behavior={Platform.OS === "ios" ? "padding" : null}>
     <CryptoBridge />
     <View style={common.home}>
-      <View style={[common.row, styles.row]}>
-    <Text style={[common.boldText, styles.title]}>Foot Print {"\n"}{"\n"}</Text>
-    <Image style={styles.image} source={require("../assets/footprint.png")} />
+      <View style={styles.row}>
+    <Logo size={84} />
+    <Text style={[common.boldText, styles.title]}>Foot Print</Text>
+    <Text style={common.label}>CHAT · RECORD · VERIFY</Text>
     </View>
-    <TextInput  style={[common.input, styles.input, {marginBottom:"5%"}]} type="text" placeholder="ID" name="alias" value={userForm.alias} onChangeText={(e) => onChangeHandler("alias", e)}/>
-    <TextInput  style={[common.input, styles.input, {marginBottom:"10%"}]} type="password" placeholder="Password (8+ characters)" value={userForm.password} name="password" secureTextEntry={true} onChangeText={(e) => onChangeHandler("password", e)}/>
-    <DesignButton text={busy ? "Please wait..." : "Login"} disabled={busy || !formReady} buttonFunction={() =>loginBtn()} width="60%" height={40} bgcolor="white" color={"black"} outline={false} />
-    <DesignButton text="SignUp" disabled={busy || !formReady} buttonFunction={() => signUpBtn()} width="60%" height={40} bgcolor="white" color={"black"} outline={false} />
+    <TextInput  style={[common.input, styles.input, {marginBottom:12}]} type="text" placeholder="ID" placeholderTextColor={colors.subtext} autoCapitalize="none" name="alias" value={userForm.alias} onChangeText={(e) => onChangeHandler("alias", e)}/>
+    <TextInput  style={[common.input, styles.input, {marginBottom:20}]} type="password" placeholder="Password (8+ characters)" placeholderTextColor={colors.subtext} value={userForm.password} name="password" secureTextEntry={true} onChangeText={(e) => onChangeHandler("password", e)}/>
+    <DesignButton text={busy ? "Please wait..." : "Login"} disabled={busy || !formReady} buttonFunction={() =>loginBtn()} width="80%" height={48} bgcolor={colors.primary} color={"white"} outline={false} />
+    <DesignButton text="SignUp" disabled={busy || !formReady} buttonFunction={() => signUpBtn()} width="80%" height={48} bgcolor={colors.primary} color={colors.primary} outline={true} />
   </View>
   </KeyboardAvoidingView>
     
@@ -172,23 +174,18 @@ function Main({navigation}) {
 
 export default Main;
 const styles = StyleSheet.create({
-  image:{
-    width:50,
-    height: 50,
-  },
   title:{
-    fontSize:40,
+    fontSize:38,
+    fontFamily: fonts.serif,
+    marginTop:14,
+    marginBottom:6,
   },
   input: {
-    color:"black",
-    borderBottomWidth: 2,
-    borderStyle: 'solid',
-    width:"60%",
+    width:"80%",
   },
   row:{
     width:"80%",
-    height:"14%",
-    marginBottom:"10%",
-    justifyContent: "center",
+    marginBottom:36,
+    alignItems: "center",
   },
 });

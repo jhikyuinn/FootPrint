@@ -5,7 +5,7 @@ import DesignButton from '../Components/DesignButton';
 import { Header } from 'react-native-elements';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import gun from '../lib/gun';
-import common, { colors } from '../lib/styles';
+import common, { colors, fonts } from '../lib/styles';
 
 function User({alias,password,pair,navigation}){
     
@@ -21,13 +21,17 @@ function User({alias,password,pair,navigation}){
 
     <Header
         backgroundColor={colors.background}
-        leftComponent={{text:"User Info",style:{width:200,fontSize:35,color:"black"}}}
+        containerStyle={common.header}
+        leftComponent={{text:"User Info",style:common.headerTitle}}
     />
     <View style={[common.home, styles.home]} >
-          <Ionicons style={{marginTop:"20%"}} name="person-circle-outline" size={200}  color="black" />
-          <Text style={[common.boldText, styles.Textsize2]}>Welcome! {alias}  </Text>
-          <DesignButton text="Profile edit" buttonFunction={() => LogoutBtn()} width="30%" height="6%" bgcolor="white" color={"black"} outline={false}/>
-          <DesignButton text="Logout" buttonFunction={() => LogoutBtn()} width="30%" height="6%" bgcolor="white" color={"black"} outline={false}/>
+          <View style={styles.avatar}>
+            <Text style={styles.initial}>{(alias || "?").charAt(0).toUpperCase()}</Text>
+          </View>
+          <Text style={[common.label, {marginTop:20}]}>SIGNED IN AS</Text>
+          <Text style={[common.boldText, styles.Textsize2]}>{alias}</Text>
+          <DesignButton text="Profile edit" buttonFunction={() => LogoutBtn()} width="60%" height={48} bgcolor={colors.primary} color={colors.primary} outline={true}/>
+          <DesignButton text="Logout" buttonFunction={() => LogoutBtn()} width="60%" height={48} bgcolor={colors.primary} color={"white"} outline={false}/>
         
     </View>
       </KeyboardAvoidingView>
@@ -41,8 +45,23 @@ const styles = StyleSheet.create({
       justifyContent: "flex-start",
     },
     Textsize2:{
-      fontSize:18,
-      marginTop:"10%",
-      marginBottom:"10%"
+      fontSize:26,
+      fontFamily:fonts.serif,
+      marginTop:6,
+      marginBottom:32
+    },
+    avatar:{
+      marginTop:"12%",
+      width:120,
+      height:120,
+      borderRadius:60,
+      backgroundColor:colors.primary,
+      alignItems:"center",
+      justifyContent:"center",
+    },
+    initial:{
+      fontSize:56,
+      fontFamily:fonts.serif,
+      color:colors.background,
     },
   });

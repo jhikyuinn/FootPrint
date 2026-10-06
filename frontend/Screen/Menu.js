@@ -25,27 +25,28 @@ function Menu({route,navigation}){
         tabBarStyle:{
             tabBarLabel: () => null,
             height: 60,
-            backgroundColor:colors.background,
+            backgroundColor:colors.surface,
+            borderTopColor:colors.border,
         },
         tabBarShowLabel: false,
         tabBarIcon: ({ activecolor, color, size,focused }) => {
             let iconName;
             if (route.name === 'Ready') {
-                iconName ='chatbubble-ellipses-outline';
-                color='black'
-                activecolor='white'
-                size=30
+                iconName = focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline';
+                color=colors.subtext
+                activecolor=colors.primary
+                size=28
             } else if (route.name === 'Notification') {
-                iconName ='notifications-outline';
-                color="black"
-                activecolor='white'
-                size=30
+                iconName = focused ? 'notifications' : 'notifications-outline';
+                color=colors.subtext
+                activecolor=colors.primary
+                size=28
             }
             else if (route.name === 'User') {
-                iconName = 'person-circle-outline';
-                color="black"
-                activecolor='white'
-                size=30
+                iconName = focused ? 'person-circle' : 'person-circle-outline';
+                color=colors.subtext
+                activecolor=colors.primary
+                size=28
             }
         return <Ionicons name={iconName} size={size} color={focused ? activecolor:color} />
         }}

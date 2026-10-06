@@ -84,18 +84,19 @@ function Ready({alias,password,pair,navigation}){
 
     <Header
         backgroundColor={colors.background}
-        leftComponent={{text:"Chat Search",style:{width:400,fontSize:35,color:"black"}}}
+        containerStyle={common.header}
+        leftComponent={{text:"Chat Search",style:common.headerTitle}}
         />
-        <View style={common.home} >
-          <View style={[common.row, styles.row]}>
-          <TextInput  style={[common.input, styles.input]} type="text" placeholder="Room Number" value={roomState} name="Roomnumber" onChangeText={(e) => onChangeRoomHandler("RoomState", e)}/>
-          <TouchableOpacity onPress={() => EntranceBtn()}>
-              <Ionicons name="search-outline" size={35} color={"black"}/>
+        <View style={[common.screen, styles.screen]} >
+          <View style={styles.row}>
+          <TextInput  style={[common.input, styles.input]} type="text" placeholder="Room Number" placeholderTextColor={colors.subtext} value={roomState} name="Roomnumber" onChangeText={(e) => onChangeRoomHandler("RoomState", e)}/>
+          <TouchableOpacity style={styles.searchBtn} onPress={() => EntranceBtn()}>
+              <Ionicons name="search-outline" size={24} color={"white"}/>
           </TouchableOpacity>
           </View>
-          <View style={{marginTop:"12%",width:"90%"}}>
-            <Text style={[common.boldText, styles.Textsize3]}>History </Text>
-            <ScrollView style={{marginBottom:"18%",height:"70%"}}>
+          <View style={{flex:1}}>
+            <Text style={[common.label, styles.Textsize3]}>HISTORY · ROOMS ON THE LEDGER</Text>
+            <ScrollView>
             <HistoryList key="qq" value="dd" navigation={navigation} alias={alias} pair={pair} /> 
               {/* {roomenterinfo && <Text>roomenterinfo.enterroomnumber</Text>!==""?
               <>
@@ -114,22 +115,31 @@ export default Ready;
 
 
 const styles = StyleSheet.create({
+    screen:{
+      paddingHorizontal:20,
+      paddingTop:8,
+    },
     Textsize3:{
-      marginTop:"10%",
-      marginBottom:"5%",
-      fontSize:20,
+      marginTop:28,
+      marginBottom:12,
+      paddingBottom:8,
+      borderBottomWidth:1,
+      borderColor:colors.border,
     },
     input: {
-      backgroundColor:"white",
-      borderBottomWidth: 2,
-      borderStyle: 'solid',
-      width:"80%",
-      marginBottom:10,
+      flex:1,
+      marginRight:10,
+    },
+    searchBtn:{
+      width:48,
+      height:48,
+      borderRadius:8,
+      backgroundColor:colors.primary,
+      alignItems:"center",
+      justifyContent:"center",
     },
     row:{
-      position:"absolute",
-      top:"5%",
-      width:"80%",
-      justifyContent: "center",
+      flexDirection:"row",
+      alignItems:"center",
     },
   });
