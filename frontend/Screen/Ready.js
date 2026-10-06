@@ -3,19 +3,16 @@ import { StyleSheet, Text, View, TextInput,KeyboardAvoidingView,TouchableOpacity
 import { useState, useEffect } from 'react';
 import { Header } from 'react-native-elements';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import axios from 'axios';
 import HistoryList from './historylist';
-import gun from '../lib/gun';
+import gun, { rooms, entered } from '../lib/gun';
 import common, { colors } from '../lib/styles';
 
 function Ready({alias,password,pair,navigation}){
     const [roomState, setRoom] = useState("");
     const [currentalias, setCurrentAlias] = useState("");
 
-    const [roomenterinfo, setRoomenterInfo] = useState({
-      enterroompostID:"",
-      enterroomnumber:"",
-    });
+    // rooms this user has entered, by room name: { name, host }
+    const [roomenterinfo, setRoomenterInfo] = useState({});
 
     const onChangeRoomHandler = (keyvalue,e) => {
         setRoom({
@@ -31,28 +28,26 @@ function Ready({alias,password,pair,navigation}){
         } else {
           authUser()
         }
-        history()
-        console.log(roomenterinfo)
+        const subscriptions = history()
+        return () => subscriptions.forEach((subscription) => subscription.off())
     }, [])
 
-    // rooms this user has entered: every room on the ledger, then the history of each one
+    // rooms this user has entered, read from GUN: the names from the user's entered rooms,
+    // the host from the room list. Stays subscribed, so a room appears as soon as it is entered.
     const history=()=>{
-      axios.get(`http://localhost:1206/api/queryallrecords`).then((res) => {
-        return Promise.all(res.data.map((room) => axios.get(`http://localhost:1206/api/history/${room.Key}`)))
-      }).then((histories) => {
-          const Roomhistory=[]
-          histories.forEach((res) => {
-            res.data.map((records) => {
-              if(records.Value.postid === alias && records.Value.function==="enter") {
-                Roomhistory.push([records.Value.postid,records.Value.roomnumber])
-              }
-            })
-          })
-          setRoomenterInfo(Roomhistory)
-        }).catch((err) => {
-          console.log("history: "+err.message)
-        })
-      }
+      const subscriptions = []
+      const watching = {}
+      subscriptions.push(entered.get(alias).map().on((isEntered, name) => {
+        if(!isEntered || watching[name]) { return }
+        watching[name] = true
+        setRoomenterInfo((current) => ({...current, [name]: {name: name, host: (current[name] || {}).host}}))
+        subscriptions.push(rooms.get(name).on((room) => {
+          if(!room) { return }
+          setRoomenterInfo((current) => ({...current, [name]: {name: name, host: room.host}}))
+        }))
+      }))
+      return subscriptions
+    }
 
     const authUser = () => 
       new Promise((resolve, reject) => {
@@ -95,16 +90,12 @@ function Ready({alias,password,pair,navigation}){
           </TouchableOpacity>
           </View>
           <View style={{flex:1}}>
-            <Text style={[common.label, styles.Textsize3]}>HISTORY · ROOMS ON THE LEDGER</Text>
+            <Text style={[common.label, styles.Textsize3]}>HISTORY · ROOMS YOU ENTERED</Text>
             <ScrollView>
-            <HistoryList key="qq" value="dd" navigation={navigation} alias={alias} pair={pair} /> 
-              {/* {roomenterinfo && <Text>roomenterinfo.enterroomnumber</Text>!==""?
-              <>
-              {console.log("→"+JSON.stringify(roomenterinfo))}
-              {Object.values(roomenterinfo).map((value,idx) => (<>{console.log("😊"+value)}<HistoryList key={idx} value={value} navigation={navigation} alias={alias} pair={pair} /></>))}
-              </>:
-              <><HistoryList key={idx} value="dd" navigation={navigation} alias={alias} pair={pair} /> </>
-            } */}
+              {Object.keys(roomenterinfo).length === 0 ?
+                <Text style={styles.empty}>No rooms yet. Enter a room number above.</Text> :
+                Object.values(roomenterinfo).map((room) => (<HistoryList key={room.name} room={room} navigation={navigation} alias={alias} pair={pair} />))
+              }
             </ScrollView>
           </View>
         </View>
@@ -125,6 +116,10 @@ const styles = StyleSheet.create({
       paddingBottom:8,
       borderBottomWidth:1,
       borderColor:colors.border,
+    },
+    empty:{
+      color:colors.subtext,
+      marginTop:8,
     },
     input: {
       flex:1,

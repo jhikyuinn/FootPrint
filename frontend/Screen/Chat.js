@@ -7,7 +7,7 @@ import { Header, withTheme } from 'react-native-elements';
 import { TouchableOpacity } from 'react-native';
 
 import Message from '../Components/Message';
-import gun, { SEA } from '../lib/gun';
+import gun, { SEA, rooms, entered } from '../lib/gun';
 import common, { colors, fonts } from '../lib/styles';
 
 const initialState = {
@@ -88,6 +88,19 @@ function Chat({route,navigation}){
       currentUser.push(user.alias)
     })
     setUserList(currentUser);
+    registerRoom();
+  }
+
+  // Adds the room to the room list and to this user's entered rooms.
+  // The first user to register a room is its host.
+  function registerRoom() {
+    const room = rooms.get(roomState.RoomState);
+    entered.get(alias).get(roomState.RoomState).put(true);
+    room.once((info) => {
+      if(!info || !info.host) {
+        room.put({ name: roomState.RoomState, host: alias, createdAt: Date.now() });
+      }
+    });
   }
 
   function getMessage() {
@@ -142,6 +155,8 @@ function Chat({route,navigation}){
         }
         //이미 개설되어있는 방 입장하면서 저장(방 이름, 방 입장, 호스트 이름, 입장한 이름, 당시 해시값, 저장 시간)
         else{
+          // the ledger already knows this room's host, so the room list follows it
+          rooms.get(roomState.RoomState).put({ name: roomState.RoomState, host: res.data.HostID });
           if(res.data.Hash!==hash){
           axios.post(`http://localhost:1206/api/recordhash`, {
             "RoomNumber":roomState.RoomState,
