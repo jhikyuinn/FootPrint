@@ -30,7 +30,9 @@ function Chat({route,navigation}){
     const [messageState, setMessage] = useState("");
     const [userList, setUserList] = useState([]);
     const [invitationuser, setInvitationuser] = useState("");
-    
+    // { hash, records } while the Check Hash sheet is open: the current hash and the room's ledger history
+    const [ledger, setLedger] = useState(null);
+
 
     const userInfo = {
       alias: alias,
@@ -233,9 +235,23 @@ function Chat({route,navigation}){
       }
     })
     const hash=CryptoJS.SHA256(JSON.stringify(hashmessage)).toString()
-        axios.get(`http://localhost:1206/api/query/${roomState.RoomState}`).then((res) => {
-          alert("✏️ "+res.data.PostID +" Recorded Hash at "+res.data.DateTime+"\n"+res.data.Hash+" \n  \n 🔎 Now Hash \n"+hash)
+        // every record of the room, not only the latest one
+        axios.get(`http://localhost:1206/api/history/${roomState.RoomState}`).then((res) => {
+          setIsModalVisible(false)
+          setLedger({hash: hash, records: res.data})
+        }).catch((err) => {
+          alert("Check Hash: "+err.message)
         })
+    }
+
+    // Says which ledger record the current chat matches. Invitations carry no hash, so they are skipped.
+    function ledgerSummary(){
+      const hashed = ledger.records.filter((record) => record.Value.hash)
+      if(hashed.length === 0) { return "No hash has been recorded for this room yet." }
+      if(hashed[hashed.length-1].Value.hash === ledger.hash) { return "The current chat matches the latest recorded hash." }
+      const match = ledger.records.findIndex((record) => record.Value.hash === ledger.hash)
+      if(match !== -1) { return "The current chat matches record #"+(match+1)+", but newer hashes were recorded after it." }
+      return "The current chat matches none of the recorded hashes."
     }
 
     function Back(){
@@ -339,6 +355,32 @@ function Chat({route,navigation}){
               </View>
           </View>
           </KeyboardAvoidingView>
+          {ledger &&
+          <View style={styles.ledger}>
+            <View style={styles.ledgerHead}>
+              <Text style={styles.ledgerTitle}>Ledger records</Text>
+              <TouchableOpacity onPress={() => setLedger(null)}>
+                <Ionicons name="close-outline" size={30} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            <Text style={common.label}>CURRENT HASH</Text>
+            <Text style={styles.hash}>{ledger.hash}</Text>
+            <Text style={styles.summary}>{ledgerSummary()}</Text>
+            <Text style={[common.label, styles.ledgerCount]}>{ledger.records.length} RECORDS · NEWEST FIRST</Text>
+            <ScrollView>
+              {ledger.records.map((record, idx) => {
+                const matches = record.Value.hash !== "" && record.Value.hash === ledger.hash;
+                return (
+                  <View key={record.TxId} style={[common.card, styles.ledgerCard, !matches && styles.ledgerCardOther]}>
+                    <Text style={common.label}>#{idx+1} · {String(record.Value.function).toUpperCase()} · {record.Value.postid}</Text>
+                    <Text style={styles.time}>{new Date(record.Timestamp).toLocaleString()}</Text>
+                    <Text style={styles.hash}>{record.Value.hash || "(no hash)"}</Text>
+                    {matches && <Text style={styles.match}>✓ MATCHES THE CURRENT CHAT</Text>}
+                  </View>
+                );
+              }).reverse()}
+            </ScrollView>
+          </View>}
       </View>
 
     )
@@ -373,6 +415,68 @@ const styles = StyleSheet.create({
   messages:{
     paddingHorizontal:14,
     paddingTop:14,
+  },
+  // the Check Hash sheet, drawn over the whole chat screen
+  ledger:{
+    position:"absolute",
+    top:0,
+    bottom:0,
+    left:0,
+    right:0,
+    backgroundColor:colors.background,
+    paddingHorizontal:16,
+    paddingTop:50,
+  },
+  ledgerHead:{
+    flexDirection:"row",
+    alignItems:"center",
+    justifyContent:"space-between",
+    marginBottom:16,
+  },
+  ledgerTitle:{
+    fontSize:26,
+    fontWeight:'bold',
+    fontFamily:fonts.serif,
+    color:colors.text,
+  },
+  ledgerCount:{
+    marginBottom:10,
+    paddingBottom:8,
+    borderBottomWidth:1,
+    borderColor:colors.border,
+  },
+  ledgerCard:{
+    flexDirection:"column",
+    alignItems:"stretch",
+  },
+  ledgerCardOther:{
+    borderLeftColor:colors.border,
+  },
+  hash:{
+    fontFamily:fonts.mono,
+    fontSize:12,
+    color:colors.text,
+    marginTop:4,
+  },
+  time:{
+    fontSize:14,
+    fontWeight:'600',
+    color:colors.text,
+    marginTop:6,
+  },
+  summary:{
+    fontSize:15,
+    fontWeight:'600',
+    color:colors.accent,
+    marginTop:14,
+    marginBottom:22,
+  },
+  match:{
+    fontFamily:fonts.mono,
+    fontSize:11,
+    letterSpacing:1,
+    color:colors.accent,
+    marginTop:8,
   },
   // the two ledger actions, always visible above the conversation
   recordBar:{
