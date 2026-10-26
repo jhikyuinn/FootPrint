@@ -91,12 +91,13 @@ function Chat({route,navigation,alias,pair}){
 
   async function initRoom() {
     const currentRoom = gun.get(room);
-    const currentUser=[];
+    setUserList([]);
     currentRoom.get('user').get(alias).put(userInfo);
+    // GUN answers one member at a time, after this returns: add each one through state so the list redraws
     currentRoom.get('user').map().once((user) => {
-      currentUser.push(user.alias)
+      if(!user || !user.alias) { return }
+      setUserList((list) => list.includes(user.alias) ? list : [...list, user.alias])
     })
-    setUserList(currentUser);
     registerRoom();
   }
 
@@ -329,7 +330,7 @@ function Chat({route,navigation,alias,pair}){
               </TouchableOpacity>
           </View>
           <Text style={styles.sectionTitle}>User</Text>
-            {userList.map(user => <View style={[common.row, styles.row]}><Ionicons name={alias==user?"person-circle":"person-circle-outline"} size={25} color={alias==user?colors.primary:colors.subtext} /><Text style={{color:colors.text}}> {user}</Text></View>)}
+            {userList.map(user => <View key={user} style={[common.row, styles.row]}><Ionicons name={alias==user?"person-circle":"person-circle-outline"} size={25} color={alias==user?colors.primary:colors.subtext} /><Text style={{color:colors.text}}> {user}</Text></View>)}
           </View>
         </Modal>
 
