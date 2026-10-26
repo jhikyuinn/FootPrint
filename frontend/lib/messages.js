@@ -5,6 +5,14 @@ import CryptoJS from 'crypto-js';
 export const byTime = (a, b) => (a.at - b.at) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
 
 // SHA-256 of the room as stored: sender, body and time of every message, in time order.
+// Puts m into a list already in byTime order, without sorting it again.
+// Messages mostly arrive in order, so the search starts at the end.
+export const insertByTime = (list, m) => {
+  let i = list.length;
+  while(i > 0 && byTime(list[i - 1], m) > 0) { i--; }
+  return [...list.slice(0, i), m, ...list.slice(i)];
+};
+
 export const hashMessages = (list) =>
   CryptoJS.SHA256(JSON.stringify([...list].sort(byTime).map((m) => [m.name, m.message, m.createdAt]))).toString();
 

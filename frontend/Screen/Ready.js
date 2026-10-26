@@ -6,7 +6,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import HistoryList from './historylist';
 import DesignButton from '../Components/DesignButton';
 import axios from 'axios';
-import gun, { GUN, rooms, entered, lastRead } from '../lib/gun';
+import gun, { GUN, SEA, rooms, entered, lastRead } from '../lib/gun';
 import { API_URL } from '../lib/config';
 import { readRoom, makeSecretRoom, saveRoomKey } from '../lib/secretRoom';
 import { unreadCount } from '../lib/messages';
@@ -41,10 +41,14 @@ function Ready({alias,pair,navigation}){
         setRoomenterInfo((current) => ({...current, [name]: {name: name, host: (current[name] || {}).host}}))
         // only message times are read here; nothing is decrypted until the room is opened
         subscriptions.push(lastRead().get(name).on((at) => setReadAt((current) => ({...current, [name]: at || 0}))))
-        subscriptions.push(gun.get(name).map().once((msg, key) => {
-          if(!msg || msg.message === undefined) { return }
-          const at = GUN.state.is(msg, 'message')
-          setMessageTimes((current) => ({...current, [name]: {...current[name], [key]: at}}))
+        // messages are in each member's own space (see Chat getMessage)
+        subscriptions.push(gun.get(name).get('members').map().once((isMember, pub) => {
+          if(!isMember || SEA.opt.pub('~' + pub) !== pub) { return }
+          subscriptions.push(gun.get('~' + pub).get('msgs').get(name).map().once((msg, key) => {
+            if(!msg || msg.message === undefined) { return }
+            const at = GUN.state.is(msg, 'message')
+            setMessageTimes((current) => ({...current, [name]: {...current[name], [key]: at}}))
+          }))
         }))
         subscriptions.push(rooms.get(name).on((room) => {
           if(!room) { return }

@@ -8,8 +8,8 @@ import { TouchableOpacity } from 'react-native';
 
 import Message from '../Components/Message';
 import DesignButton from '../Components/DesignButton';
-import gun, { GUN, SEA, rooms, entered, lastRead, WAIT } from '../lib/gun';
-import { byTime, hashMessages, showTime } from '../lib/messages';
+import gun, { GUN, SEA, rooms, entered, lastRead, WAIT, readOnce } from '../lib/gun';
+import { insertByTime, hashMessages, showTime } from '../lib/messages';
 import { readRoom, unlockRoom, saveRoomKey, loadRoomKey, findUserEpub, sealKeyFor } from '../lib/secretRoom';
 import common, { colors, fonts } from '../lib/styles';
 
@@ -21,7 +21,7 @@ const initialState = {
 const reducer = (state, message) => {
     if (state.messages.some((m) => m.key === message.key)) { return state; }
     return {
-      messages: [ ...state.messages,message].sort(byTime),
+      messages: insertByTime(state.messages, message),
     };
   };
 
@@ -54,13 +54,6 @@ function Chat({route,navigation,alias,pair}){
     const subscriptions = useRef([]);
     // bumped on leave: async work started for an earlier visit sees it changed and stops
     const visit = useRef(0);
-
-
-    const userInfo = {
-      alias: alias,
-      epub: pair.epub,
-      pub: pair.pub
-    }
 
     useEffect(() => {
       prepare();
@@ -112,16 +105,10 @@ function Chat({route,navigation,alias,pair}){
     start();
   }
 
-  async function initRoom() {
-    const current = visit.current;
-    const currentRoom = gun.get(room);
+  // The room lists only its members' public keys; who they are and what they wrote is in each member's own space
+  function initRoom() {
     setUserList([]);
-    currentRoom.get('user').get(alias).put(userInfo);
-    // GUN answers one member at a time, after this returns: add each one through state so the list redraws
-    listen(currentRoom.get('user').map()).once((user) => {
-      if(current !== visit.current || !user || !user.alias) { return }
-      setUserList((list) => list.includes(user.alias) ? list : [...list, user.alias])
-    })
+    gun.get(room).get('members').get(pair.pub).put(true);
     registerRoom();
   }
 
@@ -130,48 +117,44 @@ function Chat({route,navigation,alias,pair}){
     entered.get(alias).get(room).put(true);
   }
 
-  // One subscription feeds both the screen and the room hash.
-  // (room.once() never fires on a room that has a 'user' child, so map() it is.)
+  // Each member's messages are in their user space (~pub/msgs/room), where only their key can write,
+  // so the sender is known: no signature check against every member, and the name is the signed account alias.
+  // One subscription per member feeds the member list, the screen and the room hash.
+  // shortcut: aliases are not unique in GUN, so another account can take the same alias; show part of the key if that is abused
   function getMessage() {
     const current = visit.current;
-    const messages = gun.get(room);
-    const users = gun.get(room).get('user');
-    listen(messages.map()).once(async (msg, key) => {
-      if(current !== visit.current || !msg || msg.message === undefined) { return; }
-      const at = GUN.state.is(msg, 'message');
-      listen(users.map()).once(async (user) => {
-        // only the sender's key verifies the name, so the other users stop here
-        const verifiedAlias = await SEA.verify(msg.name, user.pub);
-        if(verifiedAlias === undefined) { return; }
-        const secret = roomKey.current || user.epub;
-        const [decryptedAlias, decryptedMsg, decryptedTime] = await Promise.all([
-          SEA.decrypt(verifiedAlias, secret),
-          SEA.verify(msg.message, user.pub).then((verified) => SEA.decrypt(verified, secret)),
-          SEA.verify(msg.createdAt, user.pub).then((verified) => SEA.decrypt(verified, secret)),
-        ]);
-
-        // the name inside the message is the sender's own claim: show it only when it is the signer's alias
-        if(current === visit.current && decryptedAlias === user.alias) {
-          // only verified messages count: an unsigned node anyone adds to the room cannot change its hash
-          stored.current[key] = { key: key, at: at, name: msg.name, message: msg.message, createdAt: msg.createdAt };
-          dispatch({
-            key: key,
-            at: at,
-            name: decryptedAlias,
-            message: decryptedMsg,
-            createdAt: showTime(decryptedTime),
-          });
-        }
-      })
+    listen(gun.get(room).get('members').map()).once(async (isMember, pub) => {
+      // only a real public key: SEA rejects unsigned writes under it, but a soul like ~x is writable by anyone
+      if(current !== visit.current || !isMember || SEA.opt.pub('~' + pub) !== pub) { return; }
+      const user = await readOnce(gun.get('~' + pub));
+      if(current !== visit.current || !user || !user.alias || !user.epub) { return; }
+      // GUN answers one member at a time, after this returns: add each one through state so the list redraws
+      setUserList((list) => list.includes(user.alias) ? list : [...list, user.alias]);
+      const secret = roomKey.current || user.epub;
+      listen(gun.get('~' + pub).get('msgs').get(room).map()).once(async (msg, key) => {
+        if(current !== visit.current || !msg || msg.message === undefined) { return; }
+        const at = GUN.state.is(msg, 'message');
+        const [text, time] = await Promise.all([SEA.decrypt(msg.message, secret), SEA.decrypt(msg.createdAt, secret)]);
+        if(current !== visit.current || text === undefined) { return; }
+        // the sender's key is part of the hash, so the same text from another member hashes differently
+        stored.current[key] = { key: key, at: at, name: pub, message: msg.message, createdAt: msg.createdAt };
+        dispatch({
+          key: key,
+          at: at,
+          name: user.alias,
+          message: text,
+          createdAt: showTime(time),
+        });
+      });
     });
   }
 
   const roomHash = () => hashMessages(Object.values(stored.current));
 
   const onInitHash = async ()=>{
-    // the room has just been opened: messages arrive, then are verified one by one, so hash once
-    // no message has been verified for WAIT ms
-    // shortcut: gives up waiting after 10 * WAIT in a room that never goes quiet; count pending verifications if that hashes too early
+    // the room has just been opened: members, then their messages arrive and are decrypted one by one,
+    // so hash once no message has been added for WAIT ms
+    // shortcut: gives up waiting after 10 * WAIT in a room that never goes quiet; count pending reads if that hashes too early
     const current = visit.current;
     let count = -1;
     for(let i = 0; i < 10 && count !== Object.keys(stored.current).length; i++) {
@@ -230,19 +213,14 @@ function Chat({route,navigation,alias,pair}){
     atBottom.current = true;
     setMessage("");
     try {
-      const messages = gun.get(room);
       const createdAt = String(Date.now());
       const key = roomKey.current || pair.epub;
-      const encryptAlias = await SEA.encrypt(alias, key);
       const encryptMsg = await SEA.encrypt(text, key);
       const encryptTime = await SEA.encrypt(createdAt, key);
-      const signAlias = await SEA.sign(encryptAlias, pair);
-      const signMsg = await SEA.sign(encryptMsg, pair);
-      const signTime = await SEA.sign(encryptTime, pair);
-      messages.set({
-        name: signAlias,
-        message: signMsg,
-        createdAt: signTime,
+      // GUN signs every write to the user's own space, and peers reject unsigned ones
+      gun.user().get('msgs').get(room).set({
+        message: encryptMsg,
+        createdAt: encryptTime,
       });
     } catch (e) {
       // give the text back so it is not lost
