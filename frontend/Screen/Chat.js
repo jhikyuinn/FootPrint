@@ -34,6 +34,9 @@ function Chat({route,navigation,alias,pair}){
     const [messageState, setMessage] = useState("");
     // true while a message is being encrypted and stored; a ref, so a second tap in the same moment sees it
     const sending = useRef(false);
+    // the message list, and whether the user is at its bottom: new messages scroll into view only then
+    const messageList = useRef(null);
+    const atBottom = useRef(true);
     const [userList, setUserList] = useState([]);
     const [invitationuser, setInvitationuser] = useState("");
     // { hash, records } while the Check Hash sheet is open: the current hash and the room's ledger history
@@ -213,6 +216,8 @@ function Chat({route,navigation,alias,pair}){
     const text = messageState.trim();
     if(!text || sending.current) { return; }
     sending.current = true;
+    // your own message always comes into view
+    atBottom.current = true;
     setMessage("");
     try {
       const messages = gun.get(room);
@@ -391,9 +396,17 @@ function Chat({route,navigation,alias,pair}){
                   </TouchableOpacity>
                 </View>
               </View>
-              <ScrollView removeClippedSubviews={true} overScrollMode="never" contentContainerStyle={styles.messages}>
+              <ScrollView
+                  ref={messageList}
+                  overScrollMode="never"
+                  contentContainerStyle={styles.messages}
+                  onScroll={({nativeEvent: {contentOffset, layoutMeasurement, contentSize}}) => {
+                    atBottom.current = contentOffset.y + layoutMeasurement.height >= contentSize.height - 40;
+                  }}
+                  scrollEventThrottle={100}
+                  onContentSizeChange={() => { if(atBottom.current) { messageList.current.scrollToEnd({animated: true}); } }}>
                   {state.messages.map((message) => (
-                      <View  key={message.key}>
+                      <View key={message.key}>
                           <Message message={message} name={alias}/>
                       </View>
                   ))}
