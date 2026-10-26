@@ -41,6 +41,8 @@ function Chat({route,navigation,alias,pair}){
     // room info while an encrypted room waits for its password
     const [gate, setGate] = useState(null);
     const [gatePassword, setGatePassword] = useState("");
+    // false until the room is known to be open (free, or its key found); nothing of the room is drawn before
+    const [opened, setOpened] = useState(false);
     // every message of the room as stored (still encrypted), by key: what the room hash is made of
     const stored = useRef({});
 
@@ -59,9 +61,11 @@ function Chat({route,navigation,alias,pair}){
   async function prepare() {
     roomKey.current = null;
     stored.current = {};
-    const info = await readRoom(room);
+    setOpened(false);
+    setGate(null);
+    // both reads wait on peers, so run them together; a free room just ignores the key
+    const [info, key] = await Promise.all([readRoom(room), loadRoomKey(room, pair)]);
     if(info && info.secret) {
-      const key = await loadRoomKey(room, pair);
       if(!key) { setGate(info); return; }
       roomKey.current = key;
     }
@@ -69,6 +73,7 @@ function Chat({route,navigation,alias,pair}){
   }
 
   function start() {
+    setOpened(true);
     onInitHash();
     initRoom();
     getMessage();
@@ -313,8 +318,27 @@ function Chat({route,navigation,alias,pair}){
       setMessage(e)
     }  
 
+    // Before the room is open: a spinner while its type is read, or the password screen of an encrypted room
+    if(!opened) {
+      return(
+        <View style={styles.ledger}>
+          <View style={styles.ledgerHead}>
+            <Text style={styles.ledgerTitle}>{gate ? "Encrypted room" : room}</Text>
+            <TouchableOpacity onPress={Back}>
+              <Ionicons name="close-outline" size={30} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+          {gate ? <>
+            <Text style={styles.summary}>{room} is encrypted. Enter its password, or ask a member to invite you.</Text>
+            <TextInput style={common.input} secureTextEntry={true} placeholder="Room password" placeholderTextColor={colors.subtext} value={gatePassword} onChangeText={setGatePassword} onSubmitEditing={() => unlock()}/>
+            <DesignButton text="Enter" buttonFunction={() => unlock()} height={44} bgcolor={colors.primary} color={colors.background} outline={false}/>
+          </> : <ActivityIndicator color={colors.primary}/>}
+        </View>
+      )
+    }
+
     return(
-      
+
       <View style={common.home}>
         <KeyboardAvoidingView 
           style = {{ flex: 1, width: "100%" }}
@@ -407,18 +431,6 @@ function Chat({route,navigation,alias,pair}){
                 );
               }).reverse()}
             </ScrollView>
-          </View>}
-          {gate &&
-          <View style={styles.ledger}>
-            <View style={styles.ledgerHead}>
-              <Text style={styles.ledgerTitle}>Encrypted room</Text>
-              <TouchableOpacity onPress={Back}>
-                <Ionicons name="close-outline" size={30} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.summary}>{room} is encrypted. Enter its password, or ask a member to invite you.</Text>
-            <TextInput style={common.input} secureTextEntry={true} placeholder="Room password" placeholderTextColor={colors.subtext} value={gatePassword} onChangeText={setGatePassword} onSubmitEditing={() => unlock()}/>
-            <DesignButton text="Enter" buttonFunction={() => unlock()} height={44} bgcolor={colors.primary} color={colors.background} outline={false}/>
           </View>}
       </View>
 
