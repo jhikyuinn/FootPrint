@@ -3,7 +3,7 @@ import axios from 'axios';
 import { API_URL } from '../lib/config';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import {Modal, View, Text,TextInput,StyleSheet,ScrollView, KeyboardAvoidingView, ActivityIndicator, Platform} from 'react-native';
-import { Header, withTheme } from 'react-native-elements';
+import { Header } from 'react-native-elements';
 import { TouchableOpacity } from 'react-native';
 
 import Message from '../Components/Message';
@@ -178,7 +178,7 @@ function Chat({route,navigation,alias,pair}){
       console.log(hash)
       //처음 개설되는 방 저장(방 이름, 방 개설, 호스트 이름, 입장한 이름, 당시 해시값, 저장 시간)
         if(res.data=="None"){
-          axios.post(`${API_URL}/api/recordhash`, {
+          return axios.post(`${API_URL}/api/recordhash`, {
             "RoomNumber":room,
             "Function":"create",
             "HostID": alias,
@@ -194,7 +194,7 @@ function Chat({route,navigation,alias,pair}){
           // the ledger already knows this room's host, so the room list follows it
           rooms.get(room).put({ name: room, host: res.data.HostID });
           if(res.data.Hash!==hash){
-          axios.post(`${API_URL}/api/recordhash`, {
+          return axios.post(`${API_URL}/api/recordhash`, {
             "RoomNumber":room,
             "Function":"enter",
             "HostID": res.data.HostID,
@@ -209,6 +209,8 @@ function Chat({route,navigation,alias,pair}){
           alert("Same Hash is already recorded");
         }
         }
+      }).catch((err) => {
+        alert("Room hash: "+err.message)
       });
   }
 
@@ -249,13 +251,15 @@ function Chat({route,navigation,alias,pair}){
       //그 전의 메세지들의 해쉬값(블록체인에 저장되어있는 해쉬값)
       //그전의 메세지와 현대 메세지가 동일할경우, 그전의 메세지의 값이 존재하지 않는 경우 트랜잭션 발생
       axios.get(`${API_URL}/api/query/${encodeURIComponent(room)}`).then((res) => {
-        if(res.data.Hash==hash){
+        // the ledger has no record of this room yet (its create failed): create it now, as onInitHash does
+        const created = res.data=="None";
+        if(!created && res.data.Hash==hash){
           alert("Same Hash is already recorded");
         }else{
-          axios.post(`${API_URL}/api/recordhash`, {
+          return axios.post(`${API_URL}/api/recordhash`, {
                 "RoomNumber":room,
-                "Function":"record",
-                "HostID": res.data.HostID,
+                "Function":created ? "create" : "record",
+                "HostID": created ? alias : res.data.HostID,
                 "PostID": alias,
                 "Hash":hash,
                 "DateTime":Date().toLocaleString()
@@ -263,6 +267,8 @@ function Chat({route,navigation,alias,pair}){
             alert("Hash Recorded: \n"+res.data.Hash);
           })
         }
+    }).catch((err) => {
+      alert("Record Hash: "+err.message)
     })
   }
 
@@ -349,9 +355,9 @@ function Chat({route,navigation,alias,pair}){
           style = {{ flex: 1, width: "100%" }}
           behavior={Platform.OS === "ios" ? "padding" : null}>
         <Modal
-          useNativeDriver={true}
           transparent={true}
           visible={isModalVisible}
+          onRequestClose={() => setIsModalVisible(false)}
         >
           <View style={styles.modalview}>
             <TouchableOpacity style={{marginBottom:20}} onPress={() => modalopen()}>

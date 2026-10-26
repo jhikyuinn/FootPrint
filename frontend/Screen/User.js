@@ -1,9 +1,7 @@
 //react-native
-import { StyleSheet, Text, View, TextInput,KeyboardAvoidingView, Platform } from 'react-native';
-import { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, KeyboardAvoidingView, Platform } from 'react-native';
 import DesignButton from '../Components/DesignButton';
 import { Header } from 'react-native-elements';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import gun from '../lib/gun';
 import common, { colors, fonts } from '../lib/styles';
 
@@ -31,7 +29,6 @@ function User({alias,navigation}){
           </View>
           <Text style={[common.label, {marginTop:20}]}>SIGNED IN AS</Text>
           <Text style={[common.boldText, styles.Textsize2]}>{alias}</Text>
-          <DesignButton text="Profile edit" buttonFunction={() => LogoutBtn()} width="60%" height={48} bgcolor={colors.primary} color={colors.primary} outline={true}/>
           <DesignButton text="Logout" buttonFunction={() => LogoutBtn()} width="60%" height={48} bgcolor={colors.primary} color={"white"} outline={false}/>
         
     </View>

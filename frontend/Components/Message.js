@@ -2,7 +2,6 @@ import {View, Text, StyleSheet} from 'react-native';
 import { colors, fonts } from '../lib/styles';
 
 function Message({message, name}) {
-    console.log(message.name,name)
     const isSender = message.name === name;
 
     return (

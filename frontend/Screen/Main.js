@@ -1,7 +1,6 @@
 import CryptoBridge from '../lib/cryptoBridge';
-import { StyleSheet, Image,Text, View, TextInput,KeyboardAvoidingView, Platform } from 'react-native';
+import { StyleSheet, Text, View, TextInput,KeyboardAvoidingView, Platform } from 'react-native';
 import { useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import DesignButton from '../Components/DesignButton'
 import gun from '../lib/gun';
 import Logo from '../Components/Logo';
@@ -21,15 +20,10 @@ function Main({navigation}) {
     alias: "",
     password: "",
   });
-  const [alias, setAlias] = useState('');
   // GUN rejects a create/auth that starts while another one is still running
   const [busy, setBusy] = useState(false);
   // GUN refuses passwords shorter than 8 characters
   const formReady = (userForm.alias).length > 0 && (userForm.password).length > 7;
-
-  const clearStorage = () => {
-    AsyncStorage.clear();
-  };
 
   // SEA does all its crypto through the hidden <CryptoBridge /> below. If that WebView
   // never answers, sign up and login wait forever, so check it once at start.
@@ -51,14 +45,6 @@ function Main({navigation}) {
       }
     }, 10000);
     return () => clearTimeout(check);
-  }, [])
-
-  useEffect(() => {
-    if(gun.user().is) {
-        gun.user(gun.user().is.pub).once((res) => {
-            setAlias(res.alias);
-        });
-    }
   }, [])
 
   const createUser = () => 
@@ -96,7 +82,6 @@ function Main({navigation}) {
                 alert("Login finished without a key pair");
                 return;
               }
-              setAlias(alias);
               // the screens read the user from GUN's session (lib/session.js), so nothing secret is passed on.
               // reset, not navigate: this screen (and the password in its form) is dropped, and Back cannot return to it
               navigation.reset({ index: 0, routes: [{ name: "Menu" }] });
