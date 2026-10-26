@@ -12,6 +12,12 @@ const CHECK = 'footprint';
 // The room's latest ledger record, or "None" when it was never created. Throws when the ledger cannot be reached.
 export const queryRoom = async (room) => (await axios.get(`${API_URL}/api/query/${encodeURIComponent(room)}`)).data;
 
+// Every ledger record of the room, oldest first. Throws when the ledger cannot be reached.
+export const roomHistory = async (room) => (await axios.get(`${API_URL}/api/history/${encodeURIComponent(room)}`)).data;
+
+// Public keys of everyone the ledger has recorded in the room. Its records cannot be removed, so neither can these members.
+export const recordedPubs = (records) => records.flatMap((record) => [record.Value.hostpub, record.Value.postpub]).filter(Boolean);
+
 // The room info: undefined for a room that was never created, null when its host's info cannot be read.
 // The ledger fixes the host (HostPub, from the room's first record), so nobody else can stand in for it.
 export async function readRoom(room) {

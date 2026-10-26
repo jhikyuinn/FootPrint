@@ -8,7 +8,7 @@ import DesignButton from '../Components/DesignButton';
 import axios from 'axios';
 import gun, { GUN, SEA, entered, lastRead } from '../lib/gun';
 import { API_URL } from '../lib/config';
-import { queryRoom, makeSecretRoom, saveRoomKey } from '../lib/secretRoom';
+import { queryRoom, roomHistory, recordedPubs, makeSecretRoom, saveRoomKey } from '../lib/secretRoom';
 import { unreadCount, hashMessages } from '../lib/messages';
 import common, { colors } from '../lib/styles';
 
@@ -41,18 +41,23 @@ function Ready({alias,pair,navigation}){
         setRoomenterInfo((current) => ({...current, [name]: {name: name, host: (current[name] || {}).host}}))
         // only message times are read here; nothing is decrypted until the room is opened
         subscriptions.push(lastRead().get(name).on((at) => setReadAt((current) => ({...current, [name]: at || 0}))))
-        // messages are in each member's own space (see Chat getMessage)
-        subscriptions.push(gun.get(name).get('members').map().once((isMember, pub) => {
-          if(!isMember || SEA.opt.pub('~' + pub) !== pub) { return }
+        // messages are in each member's own space; members come from GUN and the ledger (see Chat getMessage)
+        const members = {}
+        const watchMember = (pub) => {
+          if(members[pub] || SEA.opt.pub('~' + pub) !== pub) { return }
+          members[pub] = true
           subscriptions.push(gun.get('~' + pub).get('msgs').get(name).map().once((msg, key) => {
             if(!msg || msg.message === undefined) { return }
             const at = GUN.state.is(msg, 'message')
             setMessageTimes((current) => ({...current, [name]: {...current[name], [key]: at}}))
           }))
-        }))
-        queryRoom(name).then((record) => {
-          if(!record || !record.HostID) { return }
-          setRoomenterInfo((current) => ({...current, [name]: {name: name, host: record.HostID}}))
+        }
+        subscriptions.push(gun.get(name).get('members').map().once((isMember, pub) => { if(isMember) { watchMember(pub) } }))
+        roomHistory(name).then((records) => {
+          recordedPubs(records).forEach(watchMember)
+          const latest = records[records.length - 1]
+          if(!latest || !latest.Value.hostid) { return }
+          setRoomenterInfo((current) => ({...current, [name]: {name: name, host: latest.Value.hostid}}))
         }).catch(() => {})
       }))
       return subscriptions
