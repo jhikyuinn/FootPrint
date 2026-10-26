@@ -11,7 +11,8 @@ function User({alias,navigation}){
     
     const LogoutBtn = async () => {
         gun.user().leave();
-        navigation.navigate('Main');
+        // the stack is the tab navigator's parent; reset it so Back cannot reopen the logged-out screens
+        navigation.getParent().reset({ index: 0, routes: [{ name: 'Main' }] });
     }
 
     return(
