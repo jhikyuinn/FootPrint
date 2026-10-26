@@ -117,13 +117,13 @@ app.get('/api/history/:roomState', async function (req,res){
 
 app.post('/api/recordhash', async function(req, res){
     try{
-        const { HostID, RoomNumber, DateTime, Hash, Function, PostID } = req.body;
+        const { HostID, RoomNumber, DateTime, Hash, Function, PostID, HostPub, PostPub } = req.body;
         if (!HostID || !RoomNumber) {
             res.status(400).json({ error: 'HostID and RoomNumber are required' });
             return;
         }
         const contract = await getContract();
-        await contract.submitTransaction('recordHash', HostID, RoomNumber, DateTime || '', Hash || '', Function || 'record', PostID || HostID);
+        await contract.submitTransaction('recordHash', HostID, RoomNumber, DateTime || '', Hash || '', Function || 'record', PostID || HostID, HostPub || '', PostPub || '');
         console.log(`Transaction has been submitted`);
         res.send(req.body);
     }

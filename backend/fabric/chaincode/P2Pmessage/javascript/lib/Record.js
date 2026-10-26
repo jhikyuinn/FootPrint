@@ -67,16 +67,31 @@ class Record extends Contract {
     }
 
     // Function is one of create, enter, record. PostID is the user the record is about.
+    // HostPub and PostPub are the public keys of the host and of PostID (empty from older clients).
     // (Invitations used to be written here too; they now have their own key, see invite.)
-    async recordHash(ctx, HostID, RoomNumber, DateTime, Hash, Function, PostID) {
+    async recordHash(ctx, HostID, RoomNumber, DateTime, Hash, Function, PostID, HostPub, PostPub) {
         console.info('============= START : Create Record ===========');
+
+        // The first record of a room fixes its host: later records keep it, whatever the caller sends,
+        // so nobody can take over a room by recording it again.
+        const existing = await ctx.stub.getState(RoomNumber);
+        if (existing && existing.length > 0) {
+            const first = JSON.parse(existing.toString());
+            HostID = first.HostID;
+            HostPub = first.HostPub || '';
+            if (Function === 'create') {
+                Function = 'enter';
+            }
+        }
 
         const Record = {
             HostID,
+            HostPub: HostPub || '',
             RoomNumber,
             docType: 'Record',
             Function: Function || 'record',
             PostID: PostID || HostID,
+            PostPub: PostPub || '',
             DateTime,
             Hash,
         };
