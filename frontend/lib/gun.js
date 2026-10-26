@@ -16,7 +16,7 @@ GUN({ store: asyncStore({ AsyncStorage }) })
 const gun = new GUN(GUN_PEER);
 
 // GUN cannot list its root keys, so every room is also registered here:
-// rooms.get(name) = { name, host, createdAt }
+// rooms.get(name) = { name, host, createdAt }: only read, for rooms made before room info moved to the host's space
 // entered.get(alias).get(name) = true for every room that user has entered
 export const rooms = gun.get('footprint/rooms');
 export const entered = gun.get('footprint/entered');

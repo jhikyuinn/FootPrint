@@ -1,12 +1,27 @@
 // Encrypted rooms: messages are encrypted with a room key made from the room password.
-// The room info (footprint/rooms/<room>) holds secret, salt and check; check lets a password be verified.
+// The room info holds secret, salt and check; check lets a password be verified.
+// It lives in the host's own space (~hostpub/rooms/<room>), where only the host can write.
 // Each user keeps the keys of the rooms they entered in their own space, encrypted to their own pair,
 // so the password is asked only once per account.
+import axios from 'axios';
 import gun, { SEA, rooms, readOnce } from './gun';
+import { API_URL } from './config';
 
 const CHECK = 'footprint';
 
-export const readRoom = (room) => readOnce(rooms.get(room));
+// The room's latest ledger record, or "None" when it was never created. Throws when the ledger cannot be reached.
+export const queryRoom = async (room) => (await axios.get(`${API_URL}/api/query/${encodeURIComponent(room)}`)).data;
+
+// The room info: undefined for a room that was never created, null when its host's info cannot be read.
+// The ledger fixes the host (HostPub, from the room's first record), so nobody else can stand in for it.
+export async function readRoom(room) {
+  const record = await queryRoom(room);
+  if(record === 'None') { return undefined; }
+  // shortcut: rooms recorded before HostPub keep their info in the public room list, which anyone can change;
+  // members with a saved key are still safe (Chat uses the key first), move these rooms if newcomers need the same
+  if(!record.HostPub) { return readOnce(rooms.get(room)); }
+  return (await readOnce(gun.get('~' + record.HostPub).get('rooms').get(room))) || null;
+}
 
 // { key, info }: info is merged into the room info, key is the room key
 export async function makeSecretRoom(password) {

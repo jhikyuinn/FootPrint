@@ -6,10 +6,10 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import HistoryList from './historylist';
 import DesignButton from '../Components/DesignButton';
 import axios from 'axios';
-import gun, { GUN, SEA, rooms, entered, lastRead } from '../lib/gun';
+import gun, { GUN, SEA, entered, lastRead } from '../lib/gun';
 import { API_URL } from '../lib/config';
-import { readRoom, makeSecretRoom, saveRoomKey } from '../lib/secretRoom';
-import { unreadCount } from '../lib/messages';
+import { queryRoom, makeSecretRoom, saveRoomKey } from '../lib/secretRoom';
+import { unreadCount, hashMessages } from '../lib/messages';
 import common, { colors } from '../lib/styles';
 
 function Ready({alias,pair,navigation}){
@@ -31,7 +31,7 @@ function Ready({alias,pair,navigation}){
     }, [])
 
     // rooms this user has entered, read from GUN: the names from the user's entered rooms,
-    // the host from the room list. Stays subscribed, so a room appears as soon as it is entered.
+    // the host from the ledger, which fixes it. Stays subscribed, so a room appears as soon as it is entered.
     const history=()=>{
       const subscriptions = []
       const watching = {}
@@ -50,10 +50,10 @@ function Ready({alias,pair,navigation}){
             setMessageTimes((current) => ({...current, [name]: {...current[name], [key]: at}}))
           }))
         }))
-        subscriptions.push(rooms.get(name).on((room) => {
-          if(!room) { return }
-          setRoomenterInfo((current) => ({...current, [name]: {name: name, host: room.host}}))
-        }))
+        queryRoom(name).then((record) => {
+          if(!record || !record.HostID) { return }
+          setRoomenterInfo((current) => ({...current, [name]: {name: name, host: record.HostID}}))
+        }).catch(() => {})
       }))
       return subscriptions
     }
@@ -66,14 +66,20 @@ function Ready({alias,pair,navigation}){
 
     // An existing room opens right away (Chat asks for the password of an encrypted one);
     // a new room first asks whether it is free or encrypted.
-    // a room GUN has not synced yet can look new here; createRoom checks the ledger before writing
+    // the ledger has every created room; createRoom asks it again in case the room was made meanwhile
     const EntranceBtn=async()=>{
       const name = roomState.trim()
       if(!name) { return }
       // room names become GUN node names and URL parts: # breaks GUN, ~ is GUN's user space
       if(!/^[0-9A-Za-z가-힣_-]{1,30}$/.test(name)) { alert("Room names can use letters, numbers, - and _ (up to 30)."); return }
-      const info = await readRoom(name)
-      if(info && info.host) {
+      let recorded
+      try {
+        recorded = await queryRoom(name)
+      } catch (e) {
+        alert("Could not check whether this room exists.\nTry again later.")
+        return
+      }
+      if(recorded !== "None") {
         enterRoom(name)
       } else {
         setNewRoom(name)
@@ -83,10 +89,9 @@ function Ready({alias,pair,navigation}){
     }
 
     const createRoom=async()=>{
-      // GUN may not have synced an existing room yet; the ledger has every opened room, so ask it before writing
       let recorded
       try {
-        recorded = (await axios.get(`${API_URL}/api/query/${encodeURIComponent(newRoom)}`)).data
+        recorded = await queryRoom(newRoom)
       } catch (e) {
         alert("Could not check whether this room exists.\nTry again later.")
         return
@@ -103,7 +108,24 @@ function Ready({alias,pair,navigation}){
         info = { ...info, ...made.info }
         await saveRoomKey(newRoom, made.key, pair)
       }
-      rooms.get(newRoom).put(info)
+      // the room info goes in this user's own space; the create record makes this user the host for good,
+      // and tells everyone where the info is (HostPub)
+      gun.user().get('rooms').get(newRoom).put(info)
+      try {
+        await axios.post(`${API_URL}/api/recordhash`, {
+          "RoomNumber": newRoom,
+          "Function": "create",
+          "HostID": alias,
+          "HostPub": pair.pub,
+          "PostID": alias,
+          "PostPub": pair.pub,
+          "Hash": hashMessages([]),
+          "DateTime": Date().toLocaleString(),
+        })
+      } catch (e) {
+        alert("Could not create the room: " + e.message)
+        return
+      }
       enterRoom(newRoom)
     }
 
