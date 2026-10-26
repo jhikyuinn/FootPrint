@@ -1,9 +1,7 @@
 //react-native
-import { StyleSheet, Text, View, TextInput,KeyboardAvoidingView, Platform } from 'react-native';
-import { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, KeyboardAvoidingView, Platform } from 'react-native';
 import DesignButton from '../Components/DesignButton';
 import { Header } from 'react-native-elements';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import gun from '../lib/gun';
 import common, { colors, fonts } from '../lib/styles';
 

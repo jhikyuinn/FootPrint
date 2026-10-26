@@ -3,7 +3,7 @@ import axios from 'axios';
 import { API_URL } from '../lib/config';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import {Modal, View, Text,TextInput,StyleSheet,ScrollView, KeyboardAvoidingView, ActivityIndicator, Platform} from 'react-native';
-import { Header, withTheme } from 'react-native-elements';
+import { Header } from 'react-native-elements';
 import { TouchableOpacity } from 'react-native';
 
 import Message from '../Components/Message';
