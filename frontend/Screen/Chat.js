@@ -86,6 +86,9 @@ function Chat({route,navigation,alias,pair}){
     if(key) { roomKey.current = key; start(); return; }
     // without the room info an encrypted room would open as free, and messages would go out readable by anyone
     if(info === null) { alert("Could not read the room info.\nTry again later."); Back(); return; }
+    // the ledger does not know the room yet (its creation is still being recorded): opening it now would
+    // treat it as free, even if it is going to be encrypted
+    if(info === undefined) { alert("This room is still being created.\nTry again in a moment."); Back(); return; }
     if(info && info.secret) { setGate(info); return; }
     start();
   }
