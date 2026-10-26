@@ -14,7 +14,7 @@ const HistoryList = (props) => {
 
     // every record the ledger holds for this room
     const RecordBtn=()=>{
-        axios.get(`${API_URL}/api/history/${props.room.name}`, {
+        axios.get(`${API_URL}/api/history/${encodeURIComponent(props.room.name)}`, {
         }).then((res) => {
             if(res.data.length === 0) {
                 alert("No ledger records for " + props.room.name);
