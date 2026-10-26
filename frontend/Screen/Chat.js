@@ -89,42 +89,6 @@ function Chat({route,navigation,alias,pair}){
     start();
   }
 
-  // function initRoom() {
-  //   const currentRoom = gun.get(roomState.RoomState);
-  //   const users = gun.get(roomState.RoomState).get('user');
-  //   const currentRoommessage=[];
-  //   //room message 
-  //   currentRoom.map().once((msg) => {
-  //     console.log("🦢"+JSON.stringify(msg.message));
-  //     currentRoommessage.push(msg.message);
-  //     console.log("🎫"+currentRoommessage);
-  //     users.map().once(async (user) => {
-  //       const verifiedAlias = await SEA.verify(msg.name, user.pub);
-  //       const verifiedMsg = await SEA.verify(msg.message, user.pub);
-  //       const verifiedTime = await SEA.verify(msg.createdAt, user.pub);
-  //       const decryptedAlias = await SEA.decrypt(verifiedAlias, user.epub);
-  //       const decryptedMsg = await SEA.decrypt(verifiedMsg, user.epub);
-  //       const decryptedTime = await SEA.decrypt(verifiedTime, user.epub);
-  //       if(decryptedAlias !== undefined) {
-  //         dispatch({
-  //           name: decryptedAlias,
-  //           message: decryptedMsg,
-  //           createdAt: decryptedTime,
-  //         });
-  //       }
-  //     })
-  //   })
-  //   //messagelist for hash
-  //   //room user 
-  //   const inituserlist = [];
-  //   users.get(alias).put(userInfo);
-  //   users.map().once((user) => {
-  //     inituserlist.push(user.alias);
-  //   })
-  //   setMessageList(currentRoommessage);
-  //   setUserList(inituserlist);
-  // }
-
   async function initRoom() {
     const currentRoom = gun.get(room);
     const currentUser=[];
