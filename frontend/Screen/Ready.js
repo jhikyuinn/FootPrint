@@ -107,11 +107,11 @@ function Ready({alias,pair,navigation}){
         return
       }
       let info = { name: newRoom, host: alias, createdAt: Date.now(), secret: false }
+      let made = null
       if(secret) {
         if(!roomPassword) { alert("Set a password for the encrypted room."); return }
-        const made = await makeSecretRoom(roomPassword)
+        made = await makeSecretRoom(roomPassword)
         info = { ...info, ...made.info }
-        await saveRoomKey(newRoom, made.key, pair)
       }
       // the room info goes in this user's own space; the create record makes this user the host for good,
       // and tells everyone where the info is (HostPub)
@@ -130,6 +130,15 @@ function Ready({alias,pair,navigation}){
       } catch (e) {
         alert("Could not create the room: " + e.message)
         return
+      }
+      // someone may have created the same room a moment earlier; the ledger keeps the first host, so only
+      // then is this the room's key. Otherwise the room opens at its password screen.
+      // If the check fails the key is not kept either: the password screen works for the host too.
+      const host = await queryRoom(newRoom).then((record) => record.HostPub, () => undefined)
+      if(host === pair.pub) {
+        if(made) { await saveRoomKey(newRoom, made.key, pair) }
+      } else if(host) {
+        alert(newRoom + " was just created by someone else. Opening it.")
       }
       enterRoom(newRoom)
     }
