@@ -66,6 +66,8 @@ function Ready({alias,pair,navigation}){
     const EntranceBtn=async()=>{
       const name = roomState.trim()
       if(!name) { return }
+      // room names become GUN node names and URL parts: # breaks GUN, ~ is GUN's user space
+      if(!/^[0-9A-Za-z가-힣_-]{1,30}$/.test(name)) { alert("Room names can use letters, numbers, - and _ (up to 30)."); return }
       const info = await readRoom(name)
       if(info && info.host) {
         enterRoom(name)
