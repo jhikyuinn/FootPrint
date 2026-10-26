@@ -97,11 +97,8 @@ function Main({navigation}) {
                 return;
               }
               setAlias(alias);
-              navigation.navigate("Menu", {
-                  alias: alias,
-                  password: password,
-                  pair: pair,
-              });
+              // the screens read the user from GUN's session (lib/session.js), so nothing secret is passed on
+              navigation.navigate("Menu");
             } catch (e) {
               alert("Login error: " + e.message);
             } finally {

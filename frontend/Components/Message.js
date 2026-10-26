@@ -1,4 +1,3 @@
-import { RabbitLegacy } from 'crypto-js';
 import {View, Text, StyleSheet} from 'react-native';
 import { colors, fonts } from '../lib/styles';
 

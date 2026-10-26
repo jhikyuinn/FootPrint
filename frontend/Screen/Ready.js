@@ -5,13 +5,14 @@ import { Header } from 'react-native-elements';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import HistoryList from './historylist';
 import DesignButton from '../Components/DesignButton';
-import gun, { rooms, entered } from '../lib/gun';
+import axios from 'axios';
+import { rooms, entered } from '../lib/gun';
+import { API_URL } from '../lib/config';
 import { readRoom, makeSecretRoom, saveRoomKey } from '../lib/secretRoom';
 import common, { colors } from '../lib/styles';
 
-function Ready({alias,password,pair,navigation}){
+function Ready({alias,pair,navigation}){
     const [roomState, setRoom] = useState("");
-    const [currentalias, setCurrentAlias] = useState("");
     // name of a room that does not exist yet, while the user picks its type
     const [newRoom, setNewRoom] = useState(null);
     const [secret, setSecret] = useState(false);
@@ -21,13 +22,6 @@ function Ready({alias,password,pair,navigation}){
     const [roomenterinfo, setRoomenterInfo] = useState({});
 
     useEffect(() => {
-        // Main already logged in; a second auth while one is running makes GUN answer
-        // "User is already being created or authenticated!"
-        if(gun.user().is) {
-          setCurrentAlias(alias);
-        } else {
-          authUser()
-        }
         const subscriptions = history()
         return () => subscriptions.forEach((subscription) => subscription.off())
     }, [])
@@ -49,32 +43,15 @@ function Ready({alias,password,pair,navigation}){
       return subscriptions
     }
 
-    const authUser = () => 
-      new Promise((resolve, reject) => {
-          gun.user().auth(alias, password, async res => {
-
-              if(!res.err) {
-                setCurrentAlias(res.put.alias);
-                resolve({user: gun.user().pair(), err: res.err});
-              } else {
-                window.alert(res.err);
-                resolve({user : gun.user().pair()});
-              }
-          })
-      })
     const enterRoom=(name)=>{
       setRoom("")
       setNewRoom(null)
-        navigation.navigate("Chat", {
-            alias:alias,
-            roomState: {RoomState: name},
-            pair: pair
-        });
+      navigation.navigate("Chat", { room: name });
     }
 
     // An existing room opens right away (Chat asks for the password of an encrypted one);
     // a new room first asks whether it is free or encrypted.
-    // shortcut: a room GUN has not synced within readRoom's wait looks new; the ledger's create record is the upgrade
+    // a room GUN has not synced yet can look new here; createRoom checks the ledger before writing
     const EntranceBtn=async()=>{
       const name = roomState.trim()
       if(!name) { return }
@@ -89,6 +66,19 @@ function Ready({alias,password,pair,navigation}){
     }
 
     const createRoom=async()=>{
+      // GUN may not have synced an existing room yet; the ledger has every opened room, so ask it before writing
+      let recorded
+      try {
+        recorded = (await axios.get(`${API_URL}/api/query/${encodeURIComponent(newRoom)}`)).data
+      } catch (e) {
+        alert("Could not check whether this room exists.\nTry again later.")
+        return
+      }
+      if(recorded !== "None") {
+        alert(newRoom + " already exists. Opening it.")
+        enterRoom(newRoom)
+        return
+      }
       let info = { name: newRoom, host: alias, createdAt: Date.now(), secret: false }
       if(secret) {
         if(!roomPassword) { alert("Set a password for the encrypted room."); return }
@@ -144,7 +134,7 @@ function Ready({alias,password,pair,navigation}){
             <ScrollView>
               {Object.keys(roomenterinfo).length === 0 ?
                 <Text style={styles.empty}>No rooms yet. Enter a room number above.</Text> :
-                Object.values(roomenterinfo).map((room) => (<HistoryList key={room.name} room={room} navigation={navigation} alias={alias} pair={pair} />))
+                Object.values(roomenterinfo).map((room) => (<HistoryList key={room.name} room={room} navigation={navigation} />))
               }
             </ScrollView>
           </View>

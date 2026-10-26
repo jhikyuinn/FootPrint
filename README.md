@@ -44,7 +44,7 @@ FootPrint는 이 문제를 해결하기 위해 메신저를 분산화하는 데�
 
 ## 실행 방법
 
-Node.js 18 이상이 필요합니다. Fabric 네트워크는 Linux 또는 WSL2 + Docker에서 실행합니다.
+Node.js 20.19.4 이상(또는 22.13 이상, 24.3 이상)이 필요합니다. React Native 0.86의 요구 사항입니다. Fabric 네트워크는 Linux 또는 WSL2 + Docker에서 실행합니다.
 
 ### 1. GUN Relay Server
 

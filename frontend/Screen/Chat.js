@@ -25,10 +25,9 @@ const reducer = (state, message) => {
     };
   };
 
-function Chat({route,navigation}){
-    const {alias}=route.params
-    const {pair}=route.params
-    const {roomState}=route.params
+// alias and pair come from the session (withSession in App.js); the params carry only the room name
+function Chat({route,navigation,alias,pair}){
+    const {room}=route.params
 
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [state, dispatch] = useReducer(reducer, initialState);
@@ -42,6 +41,8 @@ function Chat({route,navigation}){
     // room info while an encrypted room waits for its password
     const [gate, setGate] = useState(null);
     const [gatePassword, setGatePassword] = useState("");
+    // false until the room is known to be open (free, or its key found); nothing of the room is drawn before
+    const [opened, setOpened] = useState(false);
     // every message of the room as stored (still encrypted), by key: what the room hash is made of
     const stored = useRef({});
 
@@ -54,15 +55,17 @@ function Chat({route,navigation}){
 
     useEffect(() => {
       prepare();
-    }, [roomState.RoomState]);
+    }, [room]);
 
   // An encrypted room starts once its key is known: from this user's saved keys, or from the password
   async function prepare() {
     roomKey.current = null;
     stored.current = {};
-    const info = await readRoom(roomState.RoomState);
+    setOpened(false);
+    setGate(null);
+    // both reads wait on peers, so run them together; a free room just ignores the key
+    const [info, key] = await Promise.all([readRoom(room), loadRoomKey(room, pair)]);
     if(info && info.secret) {
-      const key = await loadRoomKey(roomState.RoomState, pair);
       if(!key) { setGate(info); return; }
       roomKey.current = key;
     }
@@ -70,6 +73,7 @@ function Chat({route,navigation}){
   }
 
   function start() {
+    setOpened(true);
     onInitHash();
     initRoom();
     getMessage();
@@ -78,51 +82,15 @@ function Chat({route,navigation}){
   async function unlock() {
     const key = await unlockRoom(gate, gatePassword);
     if(!key) { alert("Wrong password."); return; }
-    await saveRoomKey(roomState.RoomState, key, pair);
+    await saveRoomKey(room, key, pair);
     roomKey.current = key;
     setGate(null);
     setGatePassword("");
     start();
   }
 
-  // function initRoom() {
-  //   const currentRoom = gun.get(roomState.RoomState);
-  //   const users = gun.get(roomState.RoomState).get('user');
-  //   const currentRoommessage=[];
-  //   //room message 
-  //   currentRoom.map().once((msg) => {
-  //     console.log("🦢"+JSON.stringify(msg.message));
-  //     currentRoommessage.push(msg.message);
-  //     console.log("🎫"+currentRoommessage);
-  //     users.map().once(async (user) => {
-  //       const verifiedAlias = await SEA.verify(msg.name, user.pub);
-  //       const verifiedMsg = await SEA.verify(msg.message, user.pub);
-  //       const verifiedTime = await SEA.verify(msg.createdAt, user.pub);
-  //       const decryptedAlias = await SEA.decrypt(verifiedAlias, user.epub);
-  //       const decryptedMsg = await SEA.decrypt(verifiedMsg, user.epub);
-  //       const decryptedTime = await SEA.decrypt(verifiedTime, user.epub);
-  //       if(decryptedAlias !== undefined) {
-  //         dispatch({
-  //           name: decryptedAlias,
-  //           message: decryptedMsg,
-  //           createdAt: decryptedTime,
-  //         });
-  //       }
-  //     })
-  //   })
-  //   //messagelist for hash
-  //   //room user 
-  //   const inituserlist = [];
-  //   users.get(alias).put(userInfo);
-  //   users.map().once((user) => {
-  //     inituserlist.push(user.alias);
-  //   })
-  //   setMessageList(currentRoommessage);
-  //   setUserList(inituserlist);
-  // }
-
   async function initRoom() {
-    const currentRoom = gun.get(roomState.RoomState);
+    const currentRoom = gun.get(room);
     const currentUser=[];
     currentRoom.get('user').get(alias).put(userInfo);
     currentRoom.get('user').map().once((user) => {
@@ -134,14 +102,14 @@ function Chat({route,navigation}){
 
   // Adds the room to this user's entered rooms. The room info itself is made where its type is chosen (Ready).
   function registerRoom() {
-    entered.get(alias).get(roomState.RoomState).put(true);
+    entered.get(alias).get(room).put(true);
   }
 
   // One subscription feeds both the screen and the room hash.
   // (room.once() never fires on a room that has a 'user' child, so map() it is.)
   function getMessage() {
-    const messages = gun.get(roomState.RoomState);
-    const users = gun.get(roomState.RoomState).get('user');
+    const messages = gun.get(room);
+    const users = gun.get(room).get('user');
     messages.map().once(async (msg, key) => {
       if(!msg || msg.message === undefined) { return; }
       const at = GUN.state.is(msg, 'message');
@@ -177,13 +145,13 @@ function Chat({route,navigation}){
     await new Promise((resolve) => setTimeout(resolve, WAIT));
     const hash = roomHash();
       //개설되어있는 방인지 확인
-    axios.get(`${API_URL}/api/query/${roomState.RoomState}`).then((res) => {
+    axios.get(`${API_URL}/api/query/${room}`).then((res) => {
       console.log(res.data)
       console.log(hash)
       //처음 개설되는 방 저장(방 이름, 방 개설, 호스트 이름, 입장한 이름, 당시 해시값, 저장 시간)
         if(res.data=="None"){
           axios.post(`${API_URL}/api/recordhash`, {
-            "RoomNumber":roomState.RoomState,
+            "RoomNumber":room,
             "Function":"create",
             "HostID": alias,
             "PostID": alias,
@@ -196,10 +164,10 @@ function Chat({route,navigation}){
         //이미 개설되어있는 방 입장하면서 저장(방 이름, 방 입장, 호스트 이름, 입장한 이름, 당시 해시값, 저장 시간)
         else{
           // the ledger already knows this room's host, so the room list follows it
-          rooms.get(roomState.RoomState).put({ name: roomState.RoomState, host: res.data.HostID });
+          rooms.get(room).put({ name: room, host: res.data.HostID });
           if(res.data.Hash!==hash){
           axios.post(`${API_URL}/api/recordhash`, {
-            "RoomNumber":roomState.RoomState,
+            "RoomNumber":room,
             "Function":"enter",
             "HostID": res.data.HostID,
             "PostID": alias,
@@ -217,7 +185,7 @@ function Chat({route,navigation}){
   }
 
   async function saveMessage() {
-    const messages = gun.get(roomState.RoomState);
+    const messages = gun.get(room);
     const createdAt = String(Date.now());
     const key = roomKey.current || pair.epub;
     const encryptAlias = await SEA.encrypt(alias, key);
@@ -239,12 +207,12 @@ function Chat({route,navigation}){
     const hash = roomHash();
       //그 전의 메세지들의 해쉬값(블록체인에 저장되어있는 해쉬값)
       //그전의 메세지와 현대 메세지가 동일할경우, 그전의 메세지의 값이 존재하지 않는 경우 트랜잭션 발생
-      axios.get(`${API_URL}/api/query/${roomState.RoomState}`).then((res) => {
+      axios.get(`${API_URL}/api/query/${room}`).then((res) => {
         if(res.data.Hash==hash){
           alert("Same Hash is already recorded");
         }else{
           axios.post(`${API_URL}/api/recordhash`, {
-                "RoomNumber":roomState.RoomState,
+                "RoomNumber":room,
                 "Function":"record",
                 "HostID": res.data.HostID,
                 "PostID": alias,
@@ -261,7 +229,7 @@ function Chat({route,navigation}){
     async function onQueryHash(){
     const hash = roomHash();
         // every record of the room, not only the latest one
-        axios.get(`${API_URL}/api/history/${roomState.RoomState}`).then((res) => {
+        axios.get(`${API_URL}/api/history/${room}`).then((res) => {
           setIsModalVisible(false)
           setLedger({hash: hash, records: res.data})
         }).catch((err) => {
@@ -292,7 +260,7 @@ function Chat({route,navigation}){
       if(!epub) { alert("There is no user named "+to+"."); return }
       const sealed = roomKey.current ? await sealKeyFor(roomKey.current, epub, pair) : ""
       axios.post(`${API_URL}/api/invite`, {
-        "RoomNumber":roomState.RoomState,
+        "RoomNumber":room,
         "From": alias,
         "FromEpub": pair.epub,
         "To": to,
@@ -314,8 +282,27 @@ function Chat({route,navigation}){
       setMessage(e)
     }  
 
+    // Before the room is open: a spinner while its type is read, or the password screen of an encrypted room
+    if(!opened) {
+      return(
+        <View style={styles.ledger}>
+          <View style={styles.ledgerHead}>
+            <Text style={styles.ledgerTitle}>{gate ? "Encrypted room" : room}</Text>
+            <TouchableOpacity onPress={Back}>
+              <Ionicons name="close-outline" size={30} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+          {gate ? <>
+            <Text style={styles.summary}>{room} is encrypted. Enter its password, or ask a member to invite you.</Text>
+            <TextInput style={common.input} secureTextEntry={true} placeholder="Room password" placeholderTextColor={colors.subtext} value={gatePassword} onChangeText={setGatePassword} onSubmitEditing={() => unlock()}/>
+            <DesignButton text="Enter" buttonFunction={() => unlock()} height={44} bgcolor={colors.primary} color={colors.background} outline={false}/>
+          </> : <ActivityIndicator color={colors.primary}/>}
+        </View>
+      )
+    }
+
     return(
-      
+
       <View style={common.home}>
         <KeyboardAvoidingView 
           style = {{ flex: 1, width: "100%" }}
@@ -351,7 +338,7 @@ function Chat({route,navigation}){
           backgroundColor={colors.surface}
           containerStyle={{borderBottomColor:colors.border}}
           leftComponent={<TouchableOpacity onPress={Back}><Ionicons name="chevron-back-outline" size={30} color={colors.text} /></TouchableOpacity>}
-          centerComponent={{ text:roomState.RoomState,style:{width:220,textAlign:'center',fontSize:20,fontWeight:'bold',fontFamily:fonts.serif,color:colors.text}}}
+          centerComponent={{ text:room,style:{width:220,textAlign:'center',fontSize:20,fontWeight:'bold',fontFamily:fonts.serif,color:colors.text}}}
           rightComponent={<TouchableOpacity onPress={() => modalopen()}>
                             <Ionicons name="list-outline" size={26} color={colors.text} />
                           </TouchableOpacity>}
@@ -408,18 +395,6 @@ function Chat({route,navigation}){
                 );
               }).reverse()}
             </ScrollView>
-          </View>}
-          {gate &&
-          <View style={styles.ledger}>
-            <View style={styles.ledgerHead}>
-              <Text style={styles.ledgerTitle}>Encrypted room</Text>
-              <TouchableOpacity onPress={Back}>
-                <Ionicons name="close-outline" size={30} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.summary}>{roomState.RoomState} is encrypted. Enter its password, or ask a member to invite you.</Text>
-            <TextInput style={common.input} secureTextEntry={true} placeholder="Room password" placeholderTextColor={colors.subtext} value={gatePassword} onChangeText={setGatePassword} onSubmitEditing={() => unlock()}/>
-            <DesignButton text="Enter" buttonFunction={() => unlock()} height={44} bgcolor={colors.primary} color={colors.background} outline={false}/>
           </View>}
       </View>
 

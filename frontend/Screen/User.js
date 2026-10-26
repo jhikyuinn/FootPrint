@@ -7,7 +7,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import gun from '../lib/gun';
 import common, { colors, fonts } from '../lib/styles';
 
-function User({alias,password,pair,navigation}){
+function User({alias,navigation}){
     
     const LogoutBtn = async () => {
         gun.user().leave();
