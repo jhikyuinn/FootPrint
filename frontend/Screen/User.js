@@ -31,7 +31,6 @@ function User({alias,navigation}){
           </View>
           <Text style={[common.label, {marginTop:20}]}>SIGNED IN AS</Text>
           <Text style={[common.boldText, styles.Textsize2]}>{alias}</Text>
-          <DesignButton text="Profile edit" buttonFunction={() => LogoutBtn()} width="60%" height={48} bgcolor={colors.primary} color={colors.primary} outline={true}/>
           <DesignButton text="Logout" buttonFunction={() => LogoutBtn()} width="60%" height={48} bgcolor={colors.primary} color={"white"} outline={false}/>
         
     </View>
