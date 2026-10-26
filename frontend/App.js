@@ -20,6 +20,9 @@ function App() {
             <Stack.Navigator
                 screenOptions={{
                     headerShown: false,
+                    // on web the stack otherwise grows each screen to its content and scrolls the page,
+                    // so lists inside a screen (the chat messages) never scroll and push the input off screen
+                    cardStyle: { flex: 1 },
                     animation: Platform.select({
                     ios: 'default',
                     android: 'none',
