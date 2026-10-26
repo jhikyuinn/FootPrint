@@ -48,7 +48,7 @@ function Chat({route,navigation,alias,pair}){
     const [gatePassword, setGatePassword] = useState("");
     // false until the room is known to be open (free, or its key found); nothing of the room is drawn before
     const [opened, setOpened] = useState(false);
-    // every message of the room as stored (still encrypted), by key: what the room hash is made of
+    // every verified message of the room as stored (still encrypted), by key: what the room hash is made of
     const stored = useRef({});
     // GUN listeners of the open room, turned off when the room is left or changed
     const subscriptions = useRef([]);
@@ -139,7 +139,6 @@ function Chat({route,navigation,alias,pair}){
     listen(messages.map()).once(async (msg, key) => {
       if(current !== visit.current || !msg || msg.message === undefined) { return; }
       const at = GUN.state.is(msg, 'message');
-      stored.current[key] = { key: key, at: at, name: msg.name, message: msg.message, createdAt: msg.createdAt };
       listen(users.map()).once(async (user) => {
         // only the sender's key verifies the name, so the other users stop here
         const verifiedAlias = await SEA.verify(msg.name, user.pub);
@@ -153,6 +152,8 @@ function Chat({route,navigation,alias,pair}){
 
         // the name inside the message is the sender's own claim: show it only when it is the signer's alias
         if(current === visit.current && decryptedAlias === user.alias) {
+          // only verified messages count: an unsigned node anyone adds to the room cannot change its hash
+          stored.current[key] = { key: key, at: at, name: msg.name, message: msg.message, createdAt: msg.createdAt };
           dispatch({
             key: key,
             at: at,
@@ -168,10 +169,16 @@ function Chat({route,navigation,alias,pair}){
   const roomHash = () => hashMessages(Object.values(stored.current));
 
   const onInitHash = async ()=>{
-    // the room has just been opened: give its messages WAIT ms to arrive before hashing
+    // the room has just been opened: messages arrive, then are verified one by one, so hash once
+    // no message has been verified for WAIT ms
+    // shortcut: gives up waiting after 10 * WAIT in a room that never goes quiet; count pending verifications if that hashes too early
     const current = visit.current;
-    await new Promise((resolve) => setTimeout(resolve, WAIT));
-    if(current !== visit.current) { return; }
+    let count = -1;
+    for(let i = 0; i < 10 && count !== Object.keys(stored.current).length; i++) {
+      count = Object.keys(stored.current).length;
+      await new Promise((resolve) => setTimeout(resolve, WAIT));
+      if(current !== visit.current) { return; }
+    }
     const hash = roomHash();
       //개설되어있는 방인지 확인
     axios.get(`${API_URL}/api/query/${encodeURIComponent(room)}`).then((res) => {
