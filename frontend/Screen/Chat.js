@@ -151,7 +151,8 @@ function Chat({route,navigation,alias,pair}){
           SEA.verify(msg.createdAt, user.pub).then((verified) => SEA.decrypt(verified, secret)),
         ]);
 
-        if(current === visit.current && decryptedAlias !== undefined) {
+        // the name inside the message is the sender's own claim: show it only when it is the signer's alias
+        if(current === visit.current && decryptedAlias === user.alias) {
           dispatch({
             key: key,
             at: at,
