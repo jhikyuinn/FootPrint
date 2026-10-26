@@ -1,5 +1,4 @@
-import React, {useState,useEffect,useReducer} from 'react';
-import CryptoJS from "crypto-js";
+import React, {useState,useEffect,useReducer,useRef} from 'react';
 import axios from 'axios';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import {Modal, View, Text,TextInput,StyleSheet,ScrollView, KeyboardAvoidingView, ActivityIndicator, Platform} from 'react-native';
@@ -7,16 +6,19 @@ import { Header, withTheme } from 'react-native-elements';
 import { TouchableOpacity } from 'react-native';
 
 import Message from '../Components/Message';
-import gun, { SEA, rooms, entered } from '../lib/gun';
+import gun, { GUN, SEA, rooms, entered, WAIT } from '../lib/gun';
+import { byTime, hashMessages, showTime } from '../lib/messages';
 import common, { colors, fonts } from '../lib/styles';
 
 const initialState = {
   messages: [],
 };
 
+// One entry per message key, kept in time order, so late-synced old messages land in place
 const reducer = (state, message) => {
+    if (state.messages.some((m) => m.key === message.key)) { return state; }
     return {
-      messages: [ ...state.messages,message],
+      messages: [ ...state.messages,message].sort(byTime),
     };
   };
 
@@ -32,6 +34,8 @@ function Chat({route,navigation}){
     const [invitationuser, setInvitationuser] = useState("");
     // { hash, records } while the Check Hash sheet is open: the current hash and the room's ledger history
     const [ledger, setLedger] = useState(null);
+    // every message of the room as stored (still encrypted), by key: what the room hash is made of
+    const stored = useRef({});
 
 
     const userInfo = {
@@ -41,6 +45,7 @@ function Chat({route,navigation}){
     }
 
     useEffect(() => {
+      stored.current = {};
       onInitHash();
       initRoom();
       getMessage();
@@ -105,39 +110,44 @@ function Chat({route,navigation}){
     });
   }
 
+  // One subscription feeds both the screen and the room hash.
+  // (room.once() never fires on a room that has a 'user' child, so map() it is.)
   function getMessage() {
     const messages = gun.get(roomState.RoomState);
     const users = gun.get(roomState.RoomState).get('user');
-    messages.map().once(async (msg) => {
+    messages.map().once(async (msg, key) => {
+      if(!msg || msg.message === undefined) { return; }
+      const at = GUN.state.is(msg, 'message');
+      stored.current[key] = { key: key, at: at, name: msg.name, message: msg.message, createdAt: msg.createdAt };
       users.map().once(async (user) => {
+        // only the sender's key verifies the name, so the other users stop here
         const verifiedAlias = await SEA.verify(msg.name, user.pub);
-        const verifiedMsg = await SEA.verify(msg.message, user.pub);
-        const verifiedTime = await SEA.verify(msg.createdAt, user.pub);
-        const decryptedAlias = await SEA.decrypt(verifiedAlias, user.epub);
-        const decryptedMsg = await SEA.decrypt(verifiedMsg, user.epub);
-        const decryptedTime = await SEA.decrypt(verifiedTime, user.epub);
+        if(verifiedAlias === undefined) { return; }
+        const [decryptedAlias, decryptedMsg, decryptedTime] = await Promise.all([
+          SEA.decrypt(verifiedAlias, user.epub),
+          SEA.verify(msg.message, user.pub).then((verified) => SEA.decrypt(verified, user.epub)),
+          SEA.verify(msg.createdAt, user.pub).then((verified) => SEA.decrypt(verified, user.epub)),
+        ]);
 
         if(decryptedAlias !== undefined) {
           dispatch({
+            key: key,
+            at: at,
             name: decryptedAlias,
             message: decryptedMsg,
-            createdAt: decryptedTime,
+            createdAt: showTime(decryptedTime),
           });
         }
       })
     });
   }
 
-  
+  const roomHash = () => hashMessages(Object.values(stored.current));
+
   const onInitHash = async ()=>{
-    const messages = gun.get(roomState.RoomState);
-    const hashmessage=[];
-    messages.map((msg) => {
-      if(msg.message!==undefined){
-        hashmessage.push(msg.message);
-      }
-    })
-    const hash=CryptoJS.SHA256(JSON.stringify(hashmessage)).toString()
+    // the room has just been opened: give its messages WAIT ms to arrive before hashing
+    await new Promise((resolve) => setTimeout(resolve, WAIT));
+    const hash = roomHash();
       //개설되어있는 방인지 확인
     axios.get(`http://localhost:1206/api/query/${roomState.RoomState}`).then((res) => {
       console.log(res.data)
@@ -180,7 +190,7 @@ function Chat({route,navigation}){
 
   async function saveMessage() {
     const messages = gun.get(roomState.RoomState);
-    const createdAt = new Date().toLocaleString();
+    const createdAt = String(Date.now());
     const encryptAlias = await SEA.encrypt(alias, pair.epub);
     const encryptMsg = await SEA.encrypt(messageState, pair.epub);
     const encryptTime = await SEA.encrypt(createdAt, pair.epub);
@@ -197,14 +207,7 @@ function Chat({route,navigation}){
 
     //블록체인에 총 메세지의 해쉬값 전달 완성
     const onHashMessage = async () => {
-      const messages = gun.get(roomState.RoomState);
-    const hashmessage=[];
-    messages.map((msg) => {
-      if(msg.message!==undefined){
-        hashmessage.push(msg.message);
-      }
-    })
-    const hash=CryptoJS.SHA256(JSON.stringify(hashmessage)).toString() 
+    const hash = roomHash();
       //그 전의 메세지들의 해쉬값(블록체인에 저장되어있는 해쉬값)
       //그전의 메세지와 현대 메세지가 동일할경우, 그전의 메세지의 값이 존재하지 않는 경우 트랜잭션 발생
       axios.get(`http://localhost:1206/api/query/${roomState.RoomState}`).then((res) => {
@@ -226,15 +229,8 @@ function Chat({route,navigation}){
   }
 
     //블록체인에 저장되어있는 해쉬값 호출
-    function onQueryHash(){
-      const messages = gun.get(roomState.RoomState);
-    const hashmessage=[];
-    messages.map((msg) => {
-      if(msg.message!==undefined){
-        hashmessage.push(msg.message);
-      }
-    })
-    const hash=CryptoJS.SHA256(JSON.stringify(hashmessage)).toString()
+    async function onQueryHash(){
+    const hash = roomHash();
         // every record of the room, not only the latest one
         axios.get(`http://localhost:1206/api/history/${roomState.RoomState}`).then((res) => {
           setIsModalVisible(false)
@@ -341,8 +337,8 @@ function Chat({route,navigation}){
                 </View>
               </View>
               <ScrollView removeClippedSubviews={true} overScrollMode="never" contentContainerStyle={styles.messages}>
-                  {state.messages.map((message, createdAt) => (
-                      <View  key={createdAt}>
+                  {state.messages.map((message) => (
+                      <View  key={message.key}>
                           <Message message={message} name={alias}/>
                       </View>
                   ))}

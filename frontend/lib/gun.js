@@ -22,5 +22,8 @@ const gun = new GUN(GUN_PEER);
 export const rooms = gun.get('footprint/rooms');
 export const entered = gun.get('footprint/entered');
 
-export { SEA };
+// shortcut: GUN has no "everything arrived" signal, so reads wait this long for peers; raise it on slow networks
+export const WAIT = 1000;
+
+export { SEA, GUN };
 export default gun;
