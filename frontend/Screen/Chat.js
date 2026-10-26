@@ -8,7 +8,7 @@ import { TouchableOpacity } from 'react-native';
 
 import Message from '../Components/Message';
 import DesignButton from '../Components/DesignButton';
-import gun, { GUN, SEA, rooms, entered, lastRead, WAIT, readOnce } from '../lib/gun';
+import gun, { GUN, SEA, entered, lastRead, WAIT, readOnce } from '../lib/gun';
 import { insertByTime, hashMessages, showTime } from '../lib/messages';
 import { readRoom, unlockRoom, saveRoomKey, loadRoomKey, findUserEpub, sealKeyFor } from '../lib/secretRoom';
 import common, { colors, fonts } from '../lib/styles';
@@ -77,13 +77,14 @@ function Chat({route,navigation,alias,pair}){
     stored.current = {};
     setOpened(false);
     setGate(null);
-    // both reads wait on peers, so run them together; a free room just ignores the key
-    const [info, key] = await Promise.all([readRoom(room), loadRoomKey(room, pair)]);
+    // both reads wait on peers, so run them together; null: the room info could not be read
+    const [info, key] = await Promise.all([readRoom(room).catch(() => null), loadRoomKey(room, pair)]);
     if(current !== visit.current) { return; }
-    if(info && info.secret) {
-      if(!key) { setGate(info); return; }
-      roomKey.current = key;
-    }
+    // a saved key wins over the room info, so changed room info cannot turn an encrypted room into a free one (#28)
+    if(key) { roomKey.current = key; start(); return; }
+    // without the room info an encrypted room would open as free, and messages would go out readable by anyone
+    if(info === null) { alert("Could not read the room info.\nTry again later."); Back(); return; }
+    if(info && info.secret) { setGate(info); return; }
     start();
   }
 
@@ -151,6 +152,10 @@ function Chat({route,navigation,alias,pair}){
 
   const roomHash = () => hashMessages(Object.values(stored.current));
 
+  // A room first recorded from here (not from Ready) is a free room. Its info goes in this user's space,
+  // where the create record (HostPub) points; otherwise the room could not be opened again.
+  const saveFreeRoomInfo = () => gun.user().get('rooms').get(room).put({ name: room, host: alias, createdAt: Date.now(), secret: false });
+
   const onInitHash = async ()=>{
     // the room has just been opened: members, then their messages arrive and are decrypted one by one,
     // so hash once no message has been added for WAIT ms
@@ -169,11 +174,14 @@ function Chat({route,navigation,alias,pair}){
       console.log(hash)
       //처음 개설되는 방 저장(방 이름, 방 개설, 호스트 이름, 입장한 이름, 당시 해시값, 저장 시간)
         if(res.data=="None"){
+          saveFreeRoomInfo();
           return axios.post(`${API_URL}/api/recordhash`, {
             "RoomNumber":room,
             "Function":"create",
             "HostID": alias,
+            "HostPub": pair.pub,
             "PostID": alias,
+            "PostPub": pair.pub,
             "Hash":hash,
             "DateTime":Date().toLocaleString()
           }).then((res) => {
@@ -182,14 +190,13 @@ function Chat({route,navigation,alias,pair}){
         }
         //이미 개설되어있는 방 입장하면서 저장(방 이름, 방 입장, 호스트 이름, 입장한 이름, 당시 해시값, 저장 시간)
         else{
-          // the ledger already knows this room's host, so the room list follows it
-          rooms.get(room).put({ name: room, host: res.data.HostID });
           if(res.data.Hash!==hash){
           return axios.post(`${API_URL}/api/recordhash`, {
             "RoomNumber":room,
             "Function":"enter",
             "HostID": res.data.HostID,
             "PostID": alias,
+            "PostPub": pair.pub,
             "Hash":hash,
             "DateTime":Date().toLocaleString()
           }).then((res) => {
@@ -242,11 +249,14 @@ function Chat({route,navigation,alias,pair}){
         if(!created && res.data.Hash==hash){
           alert("Same Hash is already recorded");
         }else{
+          if(created) { saveFreeRoomInfo(); }
           return axios.post(`${API_URL}/api/recordhash`, {
                 "RoomNumber":room,
                 "Function":created ? "create" : "record",
                 "HostID": created ? alias : res.data.HostID,
+                "HostPub": created ? pair.pub : "",
                 "PostID": alias,
+                "PostPub": pair.pub,
                 "Hash":hash,
                 "DateTime":Date().toLocaleString()
           }).then((res) => {
