@@ -34,6 +34,9 @@ function Chat({route,navigation,alias,pair}){
     const [messageState, setMessage] = useState("");
     // true while a message is being encrypted and stored; a ref, so a second tap in the same moment sees it
     const sending = useRef(false);
+    // the message list, and whether the user is at its bottom: new messages scroll into view only then
+    const messageList = useRef(null);
+    const atBottom = useRef(true);
     const [userList, setUserList] = useState([]);
     const [invitationuser, setInvitationuser] = useState("");
     // { hash, records } while the Check Hash sheet is open: the current hash and the room's ledger history
@@ -170,7 +173,7 @@ function Chat({route,navigation,alias,pair}){
     if(current !== visit.current) { return; }
     const hash = roomHash();
       //개설되어있는 방인지 확인
-    axios.get(`${API_URL}/api/query/${room}`).then((res) => {
+    axios.get(`${API_URL}/api/query/${encodeURIComponent(room)}`).then((res) => {
       console.log(res.data)
       console.log(hash)
       //처음 개설되는 방 저장(방 이름, 방 개설, 호스트 이름, 입장한 이름, 당시 해시값, 저장 시간)
@@ -213,6 +216,8 @@ function Chat({route,navigation,alias,pair}){
     const text = messageState.trim();
     if(!text || sending.current) { return; }
     sending.current = true;
+    // your own message always comes into view
+    atBottom.current = true;
     setMessage("");
     try {
       const messages = gun.get(room);
@@ -243,7 +248,7 @@ function Chat({route,navigation,alias,pair}){
     const hash = roomHash();
       //그 전의 메세지들의 해쉬값(블록체인에 저장되어있는 해쉬값)
       //그전의 메세지와 현대 메세지가 동일할경우, 그전의 메세지의 값이 존재하지 않는 경우 트랜잭션 발생
-      axios.get(`${API_URL}/api/query/${room}`).then((res) => {
+      axios.get(`${API_URL}/api/query/${encodeURIComponent(room)}`).then((res) => {
         if(res.data.Hash==hash){
           alert("Same Hash is already recorded");
         }else{
@@ -265,7 +270,7 @@ function Chat({route,navigation,alias,pair}){
     async function onQueryHash(){
     const hash = roomHash();
         // every record of the room, not only the latest one
-        axios.get(`${API_URL}/api/history/${room}`).then((res) => {
+        axios.get(`${API_URL}/api/history/${encodeURIComponent(room)}`).then((res) => {
           setIsModalVisible(false)
           setLedger({hash: hash, records: res.data})
         }).catch((err) => {
@@ -391,9 +396,17 @@ function Chat({route,navigation,alias,pair}){
                   </TouchableOpacity>
                 </View>
               </View>
-              <ScrollView removeClippedSubviews={true} overScrollMode="never" contentContainerStyle={styles.messages}>
+              <ScrollView
+                  ref={messageList}
+                  overScrollMode="never"
+                  contentContainerStyle={styles.messages}
+                  onScroll={({nativeEvent: {contentOffset, layoutMeasurement, contentSize}}) => {
+                    atBottom.current = contentOffset.y + layoutMeasurement.height >= contentSize.height - 40;
+                  }}
+                  scrollEventThrottle={100}
+                  onContentSizeChange={() => { if(atBottom.current) { messageList.current.scrollToEnd({animated: true}); } }}>
                   {state.messages.map((message) => (
-                      <View  key={message.key}>
+                      <View key={message.key}>
                           <Message message={message} name={alias}/>
                       </View>
                   ))}
