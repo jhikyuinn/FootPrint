@@ -51,11 +51,18 @@ export async function loadRoomKey(room, pair) {
   return stored ? (await SEA.decrypt(stored, pair)) || null : null;
 }
 
-// A user's public encryption key by alias, or undefined when there is no such user
-export async function findUserEpub(alias) {
+// Public keys of every account with this alias. GUN does not stop two accounts from taking the same alias.
+export async function aliasAccounts(alias) {
   const ref = await readOnce(gun.get('~@' + alias));
-  const soul = ref && Object.keys(ref).find((k) => k[0] === '~');
-  const user = soul && await readOnce(gun.get(soul));
+  return Object.keys(ref || {}).filter((k) => k[0] === '~').map((k) => k.slice(1));
+}
+
+// A user's public encryption key by alias: undefined when there is no such user,
+// null when several accounts share the alias, so the caller cannot pick the wrong one (#32)
+export async function findUserEpub(alias) {
+  const pubs = await aliasAccounts(alias);
+  if(pubs.length > 1) { return null; }
+  const user = pubs[0] && await readOnce(gun.get('~' + pubs[0]));
   return user ? user.epub : undefined;
 }
 

@@ -10,7 +10,7 @@ import Message from '../Components/Message';
 import DesignButton from '../Components/DesignButton';
 import gun, { GUN, SEA, entered, lastRead, WAIT, readOnce } from '../lib/gun';
 import { insertByTime, hashMessages, showTime } from '../lib/messages';
-import { readRoom, roomHistory, recordedPubs, unlockRoom, saveRoomKey, loadRoomKey, findUserEpub, sealKeyFor } from '../lib/secretRoom';
+import { readRoom, roomHistory, recordedPubs, unlockRoom, saveRoomKey, loadRoomKey, aliasAccounts, findUserEpub, sealKeyFor } from '../lib/secretRoom';
 import common, { colors, fonts } from '../lib/styles';
 
 const initialState = {
@@ -125,7 +125,6 @@ function Chat({route,navigation,alias,pair}){
   // One subscription per member feeds the member list, the screen and the room hash.
   // Members come from the room's index in GUN (live, but anyone can remove an entry) and from the ledger
   // (its records cannot be removed), so a member taken off the index still shows.
-  // shortcut: aliases are not unique in GUN, so another account can take the same alias; show part of the key if that is abused
   function getMessage() {
     const current = visit.current;
     const members = {};
@@ -135,8 +134,11 @@ function Chat({route,navigation,alias,pair}){
       members[pub] = true;
       const user = await readOnce(gun.get('~' + pub));
       if(current !== visit.current || !user || !user.alias || !user.epub) { return; }
+      // GUN lets several accounts take one alias: then the start of the key tells them apart
+      const name = (await aliasAccounts(user.alias)).length > 1 ? user.alias + " #" + pub.slice(0, 6) : user.alias;
+      if(current !== visit.current) { return; }
       // GUN answers one member at a time, after this returns: add each one through state so the list redraws
-      setUserList((list) => list.includes(user.alias) ? list : [...list, user.alias]);
+      setUserList((list) => [...list, { pub: pub, name: name }]);
       const secret = roomKey.current || user.epub;
       listen(gun.get('~' + pub).get('msgs').get(room).map()).once(async (msg, key) => {
         if(current !== visit.current || !msg || msg.message === undefined) { return; }
@@ -148,7 +150,8 @@ function Chat({route,navigation,alias,pair}){
         dispatch({
           key: key,
           at: at,
-          name: user.alias,
+          name: name,
+          pub: pub,
           message: text,
           createdAt: showTime(time),
         });
@@ -311,6 +314,7 @@ function Chat({route,navigation,alias,pair}){
       const to = invitationuser.trim()
       if(!to) { return }
       const epub = await findUserEpub(to)
+      if(epub === null) { alert("Several accounts are named "+to+", so the invitation was not sent."); return }
       if(!epub) { alert("There is no user named "+to+"."); return }
       const sealed = roomKey.current ? await sealKeyFor(roomKey.current, epub, pair) : ""
       axios.post(`${API_URL}/api/invite`, {
@@ -383,7 +387,7 @@ function Chat({route,navigation,alias,pair}){
               </TouchableOpacity>
           </View>
           <Text style={styles.sectionTitle}>User</Text>
-            {userList.map(user => <View key={user} style={[common.row, styles.row]}><Ionicons name={alias==user?"person-circle":"person-circle-outline"} size={25} color={alias==user?colors.primary:colors.subtext} /><Text style={{color:colors.text}}> {user}</Text></View>)}
+            {userList.map(user => <View key={user.pub} style={[common.row, styles.row]}><Ionicons name={user.pub==pair.pub?"person-circle":"person-circle-outline"} size={25} color={user.pub==pair.pub?colors.primary:colors.subtext} /><Text style={{color:colors.text}}> {user.name}</Text></View>)}
           </View>
         </Modal>
 
@@ -420,7 +424,7 @@ function Chat({route,navigation,alias,pair}){
                   onContentSizeChange={() => { if(atBottom.current) { messageList.current.scrollToEnd({animated: true}); } }}>
                   {state.messages.map((message) => (
                       <View key={message.key}>
-                          <Message message={message} name={alias}/>
+                          <Message message={message} mine={message.pub === pair.pub}/>
                       </View>
                   ))}
               </ScrollView>
