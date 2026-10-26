@@ -7,8 +7,10 @@ import { Header, withTheme } from 'react-native-elements';
 import { TouchableOpacity } from 'react-native';
 
 import Message from '../Components/Message';
+import DesignButton from '../Components/DesignButton';
 import gun, { GUN, SEA, rooms, entered, WAIT } from '../lib/gun';
 import { byTime, hashMessages, showTime } from '../lib/messages';
+import { readRoom, unlockRoom, saveRoomKey, loadRoomKey, findUserEpub, sealKeyFor } from '../lib/secretRoom';
 import common, { colors, fonts } from '../lib/styles';
 
 const initialState = {
@@ -35,6 +37,11 @@ function Chat({route,navigation}){
     const [invitationuser, setInvitationuser] = useState("");
     // { hash, records } while the Check Hash sheet is open: the current hash and the room's ledger history
     const [ledger, setLedger] = useState(null);
+    // key of an encrypted room; null in a free room, where messages use the sender's epub as before
+    const roomKey = useRef(null);
+    // room info while an encrypted room waits for its password
+    const [gate, setGate] = useState(null);
+    const [gatePassword, setGatePassword] = useState("");
     // every message of the room as stored (still encrypted), by key: what the room hash is made of
     const stored = useRef({});
 
@@ -46,11 +53,37 @@ function Chat({route,navigation}){
     }
 
     useEffect(() => {
-      stored.current = {};
-      onInitHash();
-      initRoom();
-      getMessage();
+      prepare();
     }, [roomState.RoomState]);
+
+  // An encrypted room starts once its key is known: from this user's saved keys, or from the password
+  async function prepare() {
+    roomKey.current = null;
+    stored.current = {};
+    const info = await readRoom(roomState.RoomState);
+    if(info && info.secret) {
+      const key = await loadRoomKey(roomState.RoomState, pair);
+      if(!key) { setGate(info); return; }
+      roomKey.current = key;
+    }
+    start();
+  }
+
+  function start() {
+    onInitHash();
+    initRoom();
+    getMessage();
+  }
+
+  async function unlock() {
+    const key = await unlockRoom(gate, gatePassword);
+    if(!key) { alert("Wrong password."); return; }
+    await saveRoomKey(roomState.RoomState, key, pair);
+    roomKey.current = key;
+    setGate(null);
+    setGatePassword("");
+    start();
+  }
 
   // function initRoom() {
   //   const currentRoom = gun.get(roomState.RoomState);
@@ -99,16 +132,9 @@ function Chat({route,navigation}){
     registerRoom();
   }
 
-  // Adds the room to the room list and to this user's entered rooms.
-  // The first user to register a room is its host.
+  // Adds the room to this user's entered rooms. The room info itself is made where its type is chosen (Ready).
   function registerRoom() {
-    const room = rooms.get(roomState.RoomState);
     entered.get(alias).get(roomState.RoomState).put(true);
-    room.once((info) => {
-      if(!info || !info.host) {
-        room.put({ name: roomState.RoomState, host: alias, createdAt: Date.now() });
-      }
-    });
   }
 
   // One subscription feeds both the screen and the room hash.
@@ -124,10 +150,11 @@ function Chat({route,navigation}){
         // only the sender's key verifies the name, so the other users stop here
         const verifiedAlias = await SEA.verify(msg.name, user.pub);
         if(verifiedAlias === undefined) { return; }
+        const secret = roomKey.current || user.epub;
         const [decryptedAlias, decryptedMsg, decryptedTime] = await Promise.all([
-          SEA.decrypt(verifiedAlias, user.epub),
-          SEA.verify(msg.message, user.pub).then((verified) => SEA.decrypt(verified, user.epub)),
-          SEA.verify(msg.createdAt, user.pub).then((verified) => SEA.decrypt(verified, user.epub)),
+          SEA.decrypt(verifiedAlias, secret),
+          SEA.verify(msg.message, user.pub).then((verified) => SEA.decrypt(verified, secret)),
+          SEA.verify(msg.createdAt, user.pub).then((verified) => SEA.decrypt(verified, secret)),
         ]);
 
         if(decryptedAlias !== undefined) {
@@ -192,9 +219,10 @@ function Chat({route,navigation}){
   async function saveMessage() {
     const messages = gun.get(roomState.RoomState);
     const createdAt = String(Date.now());
-    const encryptAlias = await SEA.encrypt(alias, pair.epub);
-    const encryptMsg = await SEA.encrypt(messageState, pair.epub);
-    const encryptTime = await SEA.encrypt(createdAt, pair.epub);
+    const key = roomKey.current || pair.epub;
+    const encryptAlias = await SEA.encrypt(alias, key);
+    const encryptMsg = await SEA.encrypt(messageState, key);
+    const encryptTime = await SEA.encrypt(createdAt, key);
     const signAlias = await SEA.sign(encryptAlias, pair);
     const signMsg = await SEA.sign(encryptMsg, pair);
     const signTime = await SEA.sign(encryptTime, pair);
@@ -256,18 +284,24 @@ function Chat({route,navigation}){
       navigation.goBack()
     }
 
-    const Invitation=(invitationuser)=>{
-      axios.get(`${API_URL}/api/query/${roomState.RoomState}`).then((res) => {
-        axios.post(`${API_URL}/api/recordhash`, {
-          "RoomNumber":roomState.RoomState,
-          "Function":"invitation",
-          "HostID": res.data.HostID,
-          "PostID": invitationuser,
-          "Hash":"",
-          "DateTime":Date().toLocaleString()
-          }).then(
-              alert("Send invitation notification to"+JSON.stringify(invitationuser))
-          )
+    // In an encrypted room the invitation carries the room key, sealed so only the invited user can open it
+    const Invitation=async(invitationuser)=>{
+      const to = invitationuser.trim()
+      if(!to) { return }
+      const epub = await findUserEpub(to)
+      if(!epub) { alert("There is no user named "+to+"."); return }
+      const sealed = roomKey.current ? await sealKeyFor(roomKey.current, epub, pair) : ""
+      axios.post(`${API_URL}/api/invite`, {
+        "RoomNumber":roomState.RoomState,
+        "From": alias,
+        "FromEpub": pair.epub,
+        "To": to,
+        "DateTime": new Date().toISOString(),
+        "Key": sealed,
+      }).then(() => {
+        alert("Sent an invitation to "+to+".")
+      }).catch((err) => {
+        alert("Invitation: "+err.message)
       })
       setInvitationuser("")
     }
@@ -374,6 +408,18 @@ function Chat({route,navigation}){
                 );
               }).reverse()}
             </ScrollView>
+          </View>}
+          {gate &&
+          <View style={styles.ledger}>
+            <View style={styles.ledgerHead}>
+              <Text style={styles.ledgerTitle}>Encrypted room</Text>
+              <TouchableOpacity onPress={Back}>
+                <Ionicons name="close-outline" size={30} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.summary}>{roomState.RoomState} is encrypted. Enter its password, or ask a member to invite you.</Text>
+            <TextInput style={common.input} secureTextEntry={true} placeholder="Room password" placeholderTextColor={colors.subtext} value={gatePassword} onChangeText={setGatePassword} onSubmitEditing={() => unlock()}/>
+            <DesignButton text="Enter" buttonFunction={() => unlock()} height={44} bgcolor={colors.primary} color={colors.background} outline={false}/>
           </View>}
       </View>
 

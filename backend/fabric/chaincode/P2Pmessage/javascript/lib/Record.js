@@ -66,7 +66,8 @@ class Record extends Contract {
         return JSON.stringify(allResults);
     }
 
-    // Function is one of create, enter, record, invitation. PostID is the user the record is about.
+    // Function is one of create, enter, record. PostID is the user the record is about.
+    // (Invitations used to be written here too; they now have their own key, see invite.)
     async recordHash(ctx, HostID, RoomNumber, DateTime, Hash, Function, PostID) {
         console.info('============= START : Create Record ===========');
 
@@ -110,6 +111,41 @@ class Record extends Contract {
         // the history iterator returns the newest write first
         results.reverse();
         return JSON.stringify(results);
+    }
+
+    // An invitation lives under its own key (invite, To, RoomNumber), so it never replaces the room's
+    // latest hash and stays until the invited user answers. Inviting again resets it to pending.
+    // Key is the room key encrypted for To (empty for a free room), FromEpub lets To decrypt it.
+    async invite(ctx, RoomNumber, From, FromEpub, To, DateTime, Key) {
+        if (!RoomNumber || !From || !To) {
+            throw new Error('RoomNumber, From and To are required');
+        }
+        const invitation = { docType: 'Invitation', RoomNumber, From, FromEpub, To, DateTime, Key, Status: 'pending' };
+        await ctx.stub.putState(ctx.stub.createCompositeKey('invite', [To, RoomNumber]), Buffer.from(JSON.stringify(invitation)));
+    }
+
+    // Every invitation sent to a user, whatever its status
+    async queryInvitations(ctx, To) {
+        const results = [];
+        for await (const { value } of ctx.stub.getStateByPartialCompositeKey('invite', [To])) {
+            results.push(JSON.parse(Buffer.from(value).toString('utf8')));
+        }
+        return JSON.stringify(results);
+    }
+
+    // Status is accepted or declined
+    async respondInvitation(ctx, RoomNumber, To, Status) {
+        if (Status !== 'accepted' && Status !== 'declined') {
+            throw new Error(`Unknown status ${Status}`);
+        }
+        const key = ctx.stub.createCompositeKey('invite', [To, RoomNumber]);
+        const bytes = await ctx.stub.getState(key);
+        if (!bytes || bytes.length === 0) {
+            throw new Error(`No invitation to ${RoomNumber} for ${To}`);
+        }
+        const invitation = JSON.parse(bytes.toString());
+        invitation.Status = Status;
+        await ctx.stub.putState(key, Buffer.from(JSON.stringify(invitation)));
     }
 
 }

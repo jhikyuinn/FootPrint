@@ -1,42 +1,55 @@
 //react-native
-import { Text, View, TouchableOpacity,KeyboardAvoidingView, Touchable, Platform, ScrollView } from 'react-native';
+import { Text, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useState, useEffect } from 'react';
 import { Header } from 'react-native-elements';
 import axios from 'axios';
 import { API_URL } from '../lib/config';
+import { saveRoomKey, openSealedKey } from '../lib/secretRoom';
 import NotificationList from './notificationlist';
 import common, { colors } from '../lib/styles';
 
+// Pending invitations sent to this user, read again every time the tab is opened
 function Notification({alias,password,pair,navigation}){
-    const [roomState, setRoom] = useState("");
-
-    const [roomenterinfo, setRoomenterInfo] = useState({
-      enterroompostID:"",
-      enterroomnumber:"",
-    });
+    const [invites, setInvites] = useState([]);
 
     useEffect(() => {
-      notification()
-  }, [])
+      load()
+      return navigation.addListener('focus', load)
+    }, [navigation])
 
-    const notification=()=>{
-      axios.get(`${API_URL}/api/queryallrecords`, {
-        }).then((res) => {
-          const Roomnotification=[];
-          res.data.map((records) => {
-          {records.Record.Function==="invitation"?
-            Roomnotification.push([records.Record.HostID,records.Record.RoomNumber]):
-            <></>
-          }
-          setRoomenterInfo(Roomnotification)
-          })
-        }).catch((err) => {
-          console.log("notification: "+err.message)
-        })
+    const load=()=>{
+      axios.get(`${API_URL}/api/invitations/${encodeURIComponent(alias)}`).then((res) => {
+        setInvites(res.data.filter((invite) => invite.Status === "pending"))
+      }).catch((err) => {
+        console.log("notification: "+err.message)
+      })
+    }
+
+    // Accepting an encrypted room's invitation opens the room key it carries and keeps it for this user
+    const answer=async(invite, accepted)=>{
+      if(accepted && invite.Key) {
+        const key = await openSealedKey(invite.Key, invite.FromEpub, pair)
+        if(!key) { alert("This invitation's room key could not be opened."); return }
+        await saveRoomKey(invite.RoomNumber, key, pair)
       }
+      try {
+        await axios.post(`${API_URL}/api/invitation/respond`, {
+          RoomNumber: invite.RoomNumber,
+          To: alias,
+          Status: accepted ? "accepted" : "declined",
+        })
+      } catch(err) {
+        alert("Invitation: "+err.message)
+        return
+      }
+      setInvites((current) => current.filter((item) => item !== invite))
+      if(accepted) {
+        navigation.navigate("Chat", { alias: alias, roomState: {RoomState: invite.RoomNumber}, pair: pair })
+      }
+    }
 
     return(
-        <KeyboardAvoidingView 
+        <KeyboardAvoidingView
     style = {{ flex: 1 , backgroundColor:colors.background}}
     behavior={Platform.OS === "ios" ? "padding" : null}>
 
@@ -46,13 +59,10 @@ function Notification({alias,password,pair,navigation}){
         leftComponent={{text:"Notification",style:common.headerTitle}}
         />
         <ScrollView contentContainerStyle={{paddingHorizontal:20,paddingTop:8}}>
-        {roomenterinfo && <Text>roomenterinfo.enterroomnumber</Text>!==""?
-              <>
-              {console.log("→"+JSON.stringify(roomenterinfo))}
-              {Object.values(roomenterinfo).map((value,idx) => (<><NotificationList key={idx} value={value} navigation={navigation} alias={alias} pair={pair} /></>))}
-              </>:
-              <> </>
-            }
+          {invites.length === 0 ?
+            <Text style={{color:colors.subtext, marginTop:8}}>No invitations.</Text> :
+            invites.map((invite) => <NotificationList key={invite.RoomNumber} invite={invite} onAnswer={answer} />)
+          }
         </ScrollView>
       </KeyboardAvoidingView>
 )

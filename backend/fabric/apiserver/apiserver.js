@@ -132,6 +132,48 @@ app.post('/api/recordhash', async function(req, res){
     }
 });
 
+// Invitations are stored apart from the room records, so they never replace a room's latest hash
+app.post('/api/invite', async function(req, res){
+    try{
+        const { RoomNumber, From, FromEpub, To, DateTime, Key } = req.body;
+        if (!RoomNumber || !From || !To) {
+            res.status(400).json({ error: 'RoomNumber, From and To are required' });
+            return;
+        }
+        const contract = await getContract();
+        await contract.submitTransaction('invite', RoomNumber, From, FromEpub || '', To, DateTime || '', Key || '');
+        res.send({ RoomNumber, From, To });
+    } catch (error) {
+        sendError(res, error);
+    }
+});
+
+// Every invitation sent to a user: [{ RoomNumber, From, FromEpub, To, DateTime, Key, Status }]
+app.get('/api/invitations/:user', async function (req,res){
+    try{
+        const contract = await getContract();
+        const result = await contract.evaluateTransaction('queryInvitations', req.params.user);
+        res.send(JSON.parse(result));
+    } catch (error) {
+        sendError(res, error);
+    }
+});
+
+// { RoomNumber, To, Status: accepted | declined }
+app.post('/api/invitation/respond', async function(req, res){
+    try{
+        const { RoomNumber, To, Status } = req.body;
+        if (!RoomNumber || !To || (Status !== 'accepted' && Status !== 'declined')) {
+            res.status(400).json({ error: 'RoomNumber, To and Status (accepted or declined) are required' });
+            return;
+        }
+        const contract = await getContract();
+        await contract.submitTransaction('respondInvitation', RoomNumber, To, Status);
+        res.send({ RoomNumber, To, Status });
+    } catch (error) {
+        sendError(res, error);
+    }
+});
 
 app.listen(PORT, HOST, () => {
     console.log(`API server listening on ${HOST}:${PORT}`);
