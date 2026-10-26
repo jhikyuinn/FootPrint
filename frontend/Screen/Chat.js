@@ -32,6 +32,8 @@ function Chat({route,navigation,alias,pair}){
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [state, dispatch] = useReducer(reducer, initialState);
     const [messageState, setMessage] = useState("");
+    // true while a message is being encrypted and stored; a ref, so a second tap in the same moment sees it
+    const sending = useRef(false);
     const [userList, setUserList] = useState([]);
     const [invitationuser, setInvitationuser] = useState("");
     // { hash, records } while the Check Hash sheet is open: the current hash and the room's ledger history
@@ -186,21 +188,32 @@ function Chat({route,navigation,alias,pair}){
   }
 
   async function saveMessage() {
-    const messages = gun.get(room);
-    const createdAt = String(Date.now());
-    const key = roomKey.current || pair.epub;
-    const encryptAlias = await SEA.encrypt(alias, key);
-    const encryptMsg = await SEA.encrypt(messageState, key);
-    const encryptTime = await SEA.encrypt(createdAt, key);
-    const signAlias = await SEA.sign(encryptAlias, pair);
-    const signMsg = await SEA.sign(encryptMsg, pair);
-    const signTime = await SEA.sign(encryptTime, pair);
-    messages.set({
-      name: signAlias,
-      message: signMsg,
-      createdAt: signTime,
-    });
+    const text = messageState.trim();
+    if(!text || sending.current) { return; }
+    sending.current = true;
     setMessage("");
+    try {
+      const messages = gun.get(room);
+      const createdAt = String(Date.now());
+      const key = roomKey.current || pair.epub;
+      const encryptAlias = await SEA.encrypt(alias, key);
+      const encryptMsg = await SEA.encrypt(text, key);
+      const encryptTime = await SEA.encrypt(createdAt, key);
+      const signAlias = await SEA.sign(encryptAlias, pair);
+      const signMsg = await SEA.sign(encryptMsg, pair);
+      const signTime = await SEA.sign(encryptTime, pair);
+      messages.set({
+        name: signAlias,
+        message: signMsg,
+        createdAt: signTime,
+      });
+    } catch (e) {
+      // give the text back so it is not lost
+      setMessage(text);
+      alert("Could not send the message: " + e.message);
+    } finally {
+      sending.current = false;
+    }
   }
 
     //블록체인에 총 메세지의 해쉬값 전달 완성
@@ -364,8 +377,8 @@ function Chat({route,navigation,alias,pair}){
                   ))}
               </ScrollView>
               <View style={styles.inputBar}>
-                  <TextInput style={styles.Chatinput} type="text" placeholder="My message" placeholderTextColor={colors.subtext} value={messageState} onChangeText={(e) => onChange("messageState",e)}/>
-                  <TouchableOpacity style={styles.sendBtn} onPress={()=> saveMessage()}>
+                  <TextInput style={styles.Chatinput} type="text" placeholder="My message" placeholderTextColor={colors.subtext} value={messageState} onChangeText={(e) => onChange("messageState",e)} onSubmitEditing={() => saveMessage()} blurOnSubmit={false} returnKeyType="send"/>
+                  <TouchableOpacity style={[styles.sendBtn, !messageState.trim() && {opacity:0.5}]} disabled={!messageState.trim()} onPress={()=> saveMessage()}>
                     <Ionicons name="send" size={20} color={colors.background}></Ionicons>
                   </TouchableOpacity>
               </View>
