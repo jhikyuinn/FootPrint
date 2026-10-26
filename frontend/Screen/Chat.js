@@ -1,5 +1,6 @@
 import React, {useState,useEffect,useReducer,useRef} from 'react';
 import axios from 'axios';
+import { API_URL } from '../lib/config';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import {Modal, View, Text,TextInput,StyleSheet,ScrollView, KeyboardAvoidingView, ActivityIndicator, Platform} from 'react-native';
 import { Header, withTheme } from 'react-native-elements';
@@ -149,12 +150,12 @@ function Chat({route,navigation}){
     await new Promise((resolve) => setTimeout(resolve, WAIT));
     const hash = roomHash();
       //개설되어있는 방인지 확인
-    axios.get(`http://localhost:1206/api/query/${roomState.RoomState}`).then((res) => {
+    axios.get(`${API_URL}/api/query/${roomState.RoomState}`).then((res) => {
       console.log(res.data)
       console.log(hash)
       //처음 개설되는 방 저장(방 이름, 방 개설, 호스트 이름, 입장한 이름, 당시 해시값, 저장 시간)
         if(res.data=="None"){
-          axios.post(`http://localhost:1206/api/recordhash`, {
+          axios.post(`${API_URL}/api/recordhash`, {
             "RoomNumber":roomState.RoomState,
             "Function":"create",
             "HostID": alias,
@@ -170,7 +171,7 @@ function Chat({route,navigation}){
           // the ledger already knows this room's host, so the room list follows it
           rooms.get(roomState.RoomState).put({ name: roomState.RoomState, host: res.data.HostID });
           if(res.data.Hash!==hash){
-          axios.post(`http://localhost:1206/api/recordhash`, {
+          axios.post(`${API_URL}/api/recordhash`, {
             "RoomNumber":roomState.RoomState,
             "Function":"enter",
             "HostID": res.data.HostID,
@@ -210,11 +211,11 @@ function Chat({route,navigation}){
     const hash = roomHash();
       //그 전의 메세지들의 해쉬값(블록체인에 저장되어있는 해쉬값)
       //그전의 메세지와 현대 메세지가 동일할경우, 그전의 메세지의 값이 존재하지 않는 경우 트랜잭션 발생
-      axios.get(`http://localhost:1206/api/query/${roomState.RoomState}`).then((res) => {
+      axios.get(`${API_URL}/api/query/${roomState.RoomState}`).then((res) => {
         if(res.data.Hash==hash){
           alert("Same Hash is already recorded");
         }else{
-          axios.post(`http://localhost:1206/api/recordhash`, {
+          axios.post(`${API_URL}/api/recordhash`, {
                 "RoomNumber":roomState.RoomState,
                 "Function":"record",
                 "HostID": res.data.HostID,
@@ -232,7 +233,7 @@ function Chat({route,navigation}){
     async function onQueryHash(){
     const hash = roomHash();
         // every record of the room, not only the latest one
-        axios.get(`http://localhost:1206/api/history/${roomState.RoomState}`).then((res) => {
+        axios.get(`${API_URL}/api/history/${roomState.RoomState}`).then((res) => {
           setIsModalVisible(false)
           setLedger({hash: hash, records: res.data})
         }).catch((err) => {
@@ -259,8 +260,8 @@ function Chat({route,navigation}){
     }
 
     const Invitation=(invitationuser)=>{
-      axios.get(`http://localhost:1206/api/query/${roomState.RoomState}`).then((res) => {
-        axios.post(`http://localhost:1206/api/recordhash`, {
+      axios.get(`${API_URL}/api/query/${roomState.RoomState}`).then((res) => {
+        axios.post(`${API_URL}/api/recordhash`, {
           "RoomNumber":roomState.RoomState,
           "Function":"invitation",
           "HostID": res.data.HostID,

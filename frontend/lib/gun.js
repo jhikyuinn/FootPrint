@@ -9,8 +9,7 @@ import 'gun/lib/radisk.js';
 import 'gun/lib/store.js';
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import asyncStore from 'gun/lib/ras.js';
-
-export const GUN_PEER = "http://localhost:8765/gun";
+import { GUN_PEER } from './config';
 
 GUN({ store: asyncStore({ AsyncStorage }) })
 

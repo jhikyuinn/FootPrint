@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, View, TextInput,KeyboardAvoidingView,TouchableOpacity, ScrollView} from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import axios from 'axios';
+import { API_URL } from '../lib/config';
 import common, { colors } from '../lib/styles';
 
 // One room of the room list: props.room = { name, host }
@@ -17,7 +18,7 @@ const HistoryList = (props) => {
 
     // every record the ledger holds for this room
     const RecordBtn=()=>{
-        axios.get(`http://localhost:1206/api/history/${props.room.name}`, {
+        axios.get(`${API_URL}/api/history/${props.room.name}`, {
         }).then((res) => {
             if(res.data.length === 0) {
                 alert("No ledger records for " + props.room.name);

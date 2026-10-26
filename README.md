@@ -78,10 +78,12 @@ API 서버는 포트 1206에서 실행됩니다. API 서버를 실행하지 않�
 
 모바일 기기의 Expo Go 앱(Android) 또는 카메라 앱(iOS)으로 QR 코드를 읽습니다.
 
-실제 기기에서 실행할 때는 `localhost`가 기기 자신을 가리키므로, 아래 주소를 서버를 실행한 PC의 IP 주소로 바꿔야 합니다. 기기와 PC는 같은 Wi-Fi에 있어야 합니다.
+서버 주소는 `frontend/lib/config.js` 한 곳에서 읽으며, 기본값은 `localhost`입니다. 실제 기기에서 실행할 때는 `localhost`가 기기 자신을 가리키므로, `frontend/.env.local` 파일을 만들어 서버를 실행한 PC의 IP 주소를 적은 뒤 `npx expo start`를 다시 실행합니다. 기기와 PC는 같은 Wi-Fi에 있어야 합니다.
 
-- `frontend/lib/gun.js` 의 `GUN_PEER` (`http://localhost:8765/gun`)
-- `frontend/Screen/*.js` 의 `http://localhost:1206`
+    EXPO_PUBLIC_API_URL=http://192.168.0.10:1206
+    EXPO_PUBLIC_GUN_PEER=http://192.168.0.10:8765/gun
+
+`.env.local`은 git에 올라가지 않습니다.
 
 ## 사용 방법
 

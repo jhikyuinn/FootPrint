@@ -47,9 +47,9 @@ Run the network from Linux or WSL2 (Docker Desktop with WSL integration), not fr
 `bash networkDown.sh` stops the network and deletes the ledger and the wallet, so run
 `enrollAdmin` and `registerUser` again after the next `startFabric.sh`.
 
-The API server listens on `0.0.0.0:1206`; set `HOST` and `PORT` to change it. The app has
-`http://localhost:1206` hard-coded in `frontend/Screen/*.js`, so point those URLs at the
-machine running the API server.
+The API server listens on `0.0.0.0:1206`; set `HOST` and `PORT` to change it. The app reads
+the address from `EXPO_PUBLIC_API_URL` (default `http://localhost:1206`, see `frontend/lib/config.js`),
+so point it at the machine running the API server.
 The wallet created in `apiserver/wallet` holds private keys and is git-ignored.
 
 ### Problems seen on WSL with the repository on a Windows drive (`/mnt/c`)

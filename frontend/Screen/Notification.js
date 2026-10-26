@@ -3,6 +3,7 @@ import { Text, View, TouchableOpacity,KeyboardAvoidingView, Touchable, Platform,
 import { useState, useEffect } from 'react';
 import { Header } from 'react-native-elements';
 import axios from 'axios';
+import { API_URL } from '../lib/config';
 import NotificationList from './notificationlist';
 import common, { colors } from '../lib/styles';
 
@@ -19,7 +20,7 @@ function Notification({alias,password,pair,navigation}){
   }, [])
 
     const notification=()=>{
-      axios.get(`http://localhost:1206/api/queryallrecords`, {
+      axios.get(`${API_URL}/api/queryallrecords`, {
         }).then((res) => {
           const Roomnotification=[];
           res.data.map((records) => {
