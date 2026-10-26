@@ -8,5 +8,10 @@ export const byTime = (a, b) => (a.at - b.at) || (a.key < b.key ? -1 : a.key > b
 export const hashMessages = (list) =>
   CryptoJS.SHA256(JSON.stringify([...list].sort(byTime).map((m) => [m.name, m.message, m.createdAt]))).toString();
 
+// Messages newer than readAt; nothing while readAt has not loaded yet, so a room does not flash as all unread.
+// times: { messageKey: GUN time of the message }, readAt: GUN time this user last had the room open
+export const unreadCount = (times, readAt) =>
+  readAt === undefined ? 0 : Object.values(times || {}).filter((at) => at > readAt).length;
+
 // New messages store Date.now(); older ones stored a locale string, which is shown as is.
 export const showTime = (t) => (/^\d+$/.test(String(t)) ? new Date(Number(t)).toLocaleString() : t);

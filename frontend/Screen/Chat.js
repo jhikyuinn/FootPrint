@@ -8,7 +8,7 @@ import { TouchableOpacity } from 'react-native';
 
 import Message from '../Components/Message';
 import DesignButton from '../Components/DesignButton';
-import gun, { GUN, SEA, rooms, entered, WAIT } from '../lib/gun';
+import gun, { GUN, SEA, rooms, entered, lastRead, WAIT } from '../lib/gun';
 import { byTime, hashMessages, showTime } from '../lib/messages';
 import { readRoom, unlockRoom, saveRoomKey, loadRoomKey, findUserEpub, sealKeyFor } from '../lib/secretRoom';
 import common, { colors, fonts } from '../lib/styles';
@@ -62,6 +62,8 @@ function Chat({route,navigation,alias,pair}){
     useEffect(() => {
       prepare();
       return () => {
+        // everything that arrived while the room was open has been seen
+        lastRead().get(room).put(GUN.state());
         visit.current++;
         subscriptions.current.forEach((subscription) => subscription.off());
         subscriptions.current = [];
@@ -91,6 +93,7 @@ function Chat({route,navigation,alias,pair}){
 
   function start() {
     setOpened(true);
+    lastRead().get(room).put(GUN.state());
     onInitHash();
     initRoom();
     getMessage();
