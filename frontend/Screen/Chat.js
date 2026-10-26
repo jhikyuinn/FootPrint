@@ -355,9 +355,9 @@ function Chat({route,navigation,alias,pair}){
           style = {{ flex: 1, width: "100%" }}
           behavior={Platform.OS === "ios" ? "padding" : null}>
         <Modal
-          useNativeDriver={true}
           transparent={true}
           visible={isModalVisible}
+          onRequestClose={() => setIsModalVisible(false)}
         >
           <View style={styles.modalview}>
             <TouchableOpacity style={{marginBottom:20}} onPress={() => modalopen()}>
