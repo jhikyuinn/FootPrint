@@ -1,6 +1,6 @@
 // Run with: node lib/messages.test.mjs
 import assert from 'node:assert';
-import { byTime, hashMessages, showTime, unreadCount } from './messages.js';
+import { byTime, hashMessages, insertByTime, showTime, unreadCount } from './messages.js';
 
 const a = { key: 'a', at: 1, name: 'n1', message: 'm1', createdAt: 't1' };
 const b = { key: 'b', at: 2, name: 'n2', message: 'm2', createdAt: 't2' };
@@ -8,6 +8,10 @@ const c = { key: 'c', at: 2, name: 'n3', message: 'm3', createdAt: 't3' };
 
 // a late-synced old message lands in place, equal times fall back to the key
 assert.deepStrictEqual([c, b, a].sort(byTime), [a, b, c]);
+// inserting in any arrival order gives the sorted list
+for (const order of [[a, b, c], [c, b, a], [b, c, a], [c, a, b]]) {
+  assert.deepStrictEqual(order.reduce(insertByTime, []), [a, b, c]);
+}
 // arrival order does not change the hash (two devices agree)
 assert.strictEqual(hashMessages([c, a, b]), hashMessages([a, b, c]));
 // changing the body, the sender or the time changes the hash
