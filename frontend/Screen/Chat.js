@@ -8,7 +8,7 @@ import { TouchableOpacity } from 'react-native';
 
 import Message from '../Components/Message';
 import DesignButton from '../Components/DesignButton';
-import gun, { GUN, SEA, rooms, entered, WAIT } from '../lib/gun';
+import gun, { GUN, SEA, rooms, entered, lastRead, WAIT } from '../lib/gun';
 import { byTime, hashMessages, showTime } from '../lib/messages';
 import { readRoom, unlockRoom, saveRoomKey, loadRoomKey, findUserEpub, sealKeyFor } from '../lib/secretRoom';
 import common, { colors, fonts } from '../lib/styles';
@@ -32,6 +32,8 @@ function Chat({route,navigation,alias,pair}){
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [state, dispatch] = useReducer(reducer, initialState);
     const [messageState, setMessage] = useState("");
+    // true while a message is being encrypted and stored; a ref, so a second tap in the same moment sees it
+    const sending = useRef(false);
     const [userList, setUserList] = useState([]);
     const [invitationuser, setInvitationuser] = useState("");
     // { hash, records } while the Check Hash sheet is open: the current hash and the room's ledger history
@@ -45,6 +47,10 @@ function Chat({route,navigation,alias,pair}){
     const [opened, setOpened] = useState(false);
     // every message of the room as stored (still encrypted), by key: what the room hash is made of
     const stored = useRef({});
+    // GUN listeners of the open room, turned off when the room is left or changed
+    const subscriptions = useRef([]);
+    // bumped on leave: async work started for an earlier visit sees it changed and stops
+    const visit = useRef(0);
 
 
     const userInfo = {
@@ -55,16 +61,29 @@ function Chat({route,navigation,alias,pair}){
 
     useEffect(() => {
       prepare();
+      return () => {
+        // everything that arrived while the room was open has been seen
+        lastRead().get(room).put(GUN.state());
+        visit.current++;
+        subscriptions.current.forEach((subscription) => subscription.off());
+        subscriptions.current = [];
+      };
     }, [room]);
+
+    // keeps a listener so leaving the room turns it off
+    // shortcut: GUN's off() does not detach map().once, so a left room's callback still runs once per new message and returns at the visit check; switch to on() with per-event off if that ever costs
+    const listen = (chain) => { subscriptions.current.push(chain); return chain; };
 
   // An encrypted room starts once its key is known: from this user's saved keys, or from the password
   async function prepare() {
+    const current = visit.current;
     roomKey.current = null;
     stored.current = {};
     setOpened(false);
     setGate(null);
     // both reads wait on peers, so run them together; a free room just ignores the key
     const [info, key] = await Promise.all([readRoom(room), loadRoomKey(room, pair)]);
+    if(current !== visit.current) { return; }
     if(info && info.secret) {
       if(!key) { setGate(info); return; }
       roomKey.current = key;
@@ -74,6 +93,7 @@ function Chat({route,navigation,alias,pair}){
 
   function start() {
     setOpened(true);
+    lastRead().get(room).put(GUN.state());
     onInitHash();
     initRoom();
     getMessage();
@@ -90,13 +110,15 @@ function Chat({route,navigation,alias,pair}){
   }
 
   async function initRoom() {
+    const current = visit.current;
     const currentRoom = gun.get(room);
-    const currentUser=[];
+    setUserList([]);
     currentRoom.get('user').get(alias).put(userInfo);
-    currentRoom.get('user').map().once((user) => {
-      currentUser.push(user.alias)
+    // GUN answers one member at a time, after this returns: add each one through state so the list redraws
+    listen(currentRoom.get('user').map()).once((user) => {
+      if(current !== visit.current || !user || !user.alias) { return }
+      setUserList((list) => list.includes(user.alias) ? list : [...list, user.alias])
     })
-    setUserList(currentUser);
     registerRoom();
   }
 
@@ -108,13 +130,14 @@ function Chat({route,navigation,alias,pair}){
   // One subscription feeds both the screen and the room hash.
   // (room.once() never fires on a room that has a 'user' child, so map() it is.)
   function getMessage() {
+    const current = visit.current;
     const messages = gun.get(room);
     const users = gun.get(room).get('user');
-    messages.map().once(async (msg, key) => {
-      if(!msg || msg.message === undefined) { return; }
+    listen(messages.map()).once(async (msg, key) => {
+      if(current !== visit.current || !msg || msg.message === undefined) { return; }
       const at = GUN.state.is(msg, 'message');
       stored.current[key] = { key: key, at: at, name: msg.name, message: msg.message, createdAt: msg.createdAt };
-      users.map().once(async (user) => {
+      listen(users.map()).once(async (user) => {
         // only the sender's key verifies the name, so the other users stop here
         const verifiedAlias = await SEA.verify(msg.name, user.pub);
         if(verifiedAlias === undefined) { return; }
@@ -125,7 +148,7 @@ function Chat({route,navigation,alias,pair}){
           SEA.verify(msg.createdAt, user.pub).then((verified) => SEA.decrypt(verified, secret)),
         ]);
 
-        if(decryptedAlias !== undefined) {
+        if(current === visit.current && decryptedAlias !== undefined) {
           dispatch({
             key: key,
             at: at,
@@ -142,7 +165,9 @@ function Chat({route,navigation,alias,pair}){
 
   const onInitHash = async ()=>{
     // the room has just been opened: give its messages WAIT ms to arrive before hashing
+    const current = visit.current;
     await new Promise((resolve) => setTimeout(resolve, WAIT));
+    if(current !== visit.current) { return; }
     const hash = roomHash();
       //개설되어있는 방인지 확인
     axios.get(`${API_URL}/api/query/${room}`).then((res) => {
@@ -185,21 +210,32 @@ function Chat({route,navigation,alias,pair}){
   }
 
   async function saveMessage() {
-    const messages = gun.get(room);
-    const createdAt = String(Date.now());
-    const key = roomKey.current || pair.epub;
-    const encryptAlias = await SEA.encrypt(alias, key);
-    const encryptMsg = await SEA.encrypt(messageState, key);
-    const encryptTime = await SEA.encrypt(createdAt, key);
-    const signAlias = await SEA.sign(encryptAlias, pair);
-    const signMsg = await SEA.sign(encryptMsg, pair);
-    const signTime = await SEA.sign(encryptTime, pair);
-    messages.set({
-      name: signAlias,
-      message: signMsg,
-      createdAt: signTime,
-    });
+    const text = messageState.trim();
+    if(!text || sending.current) { return; }
+    sending.current = true;
     setMessage("");
+    try {
+      const messages = gun.get(room);
+      const createdAt = String(Date.now());
+      const key = roomKey.current || pair.epub;
+      const encryptAlias = await SEA.encrypt(alias, key);
+      const encryptMsg = await SEA.encrypt(text, key);
+      const encryptTime = await SEA.encrypt(createdAt, key);
+      const signAlias = await SEA.sign(encryptAlias, pair);
+      const signMsg = await SEA.sign(encryptMsg, pair);
+      const signTime = await SEA.sign(encryptTime, pair);
+      messages.set({
+        name: signAlias,
+        message: signMsg,
+        createdAt: signTime,
+      });
+    } catch (e) {
+      // give the text back so it is not lost
+      setMessage(text);
+      alert("Could not send the message: " + e.message);
+    } finally {
+      sending.current = false;
+    }
   }
 
     //블록체인에 총 메세지의 해쉬값 전달 완성
@@ -329,7 +365,7 @@ function Chat({route,navigation,alias,pair}){
               </TouchableOpacity>
           </View>
           <Text style={styles.sectionTitle}>User</Text>
-            {userList.map(user => <View style={[common.row, styles.row]}><Ionicons name={alias==user?"person-circle":"person-circle-outline"} size={25} color={alias==user?colors.primary:colors.subtext} /><Text style={{color:colors.text}}> {user}</Text></View>)}
+            {userList.map(user => <View key={user} style={[common.row, styles.row]}><Ionicons name={alias==user?"person-circle":"person-circle-outline"} size={25} color={alias==user?colors.primary:colors.subtext} /><Text style={{color:colors.text}}> {user}</Text></View>)}
           </View>
         </Modal>
 
@@ -363,8 +399,8 @@ function Chat({route,navigation,alias,pair}){
                   ))}
               </ScrollView>
               <View style={styles.inputBar}>
-                  <TextInput style={styles.Chatinput} type="text" placeholder="My message" placeholderTextColor={colors.subtext} value={messageState} onChangeText={(e) => onChange("messageState",e)}/>
-                  <TouchableOpacity style={styles.sendBtn} onPress={()=> saveMessage()}>
+                  <TextInput style={styles.Chatinput} type="text" placeholder="My message" placeholderTextColor={colors.subtext} value={messageState} onChangeText={(e) => onChange("messageState",e)} onSubmitEditing={() => saveMessage()} blurOnSubmit={false} returnKeyType="send"/>
+                  <TouchableOpacity style={[styles.sendBtn, !messageState.trim() && {opacity:0.5}]} disabled={!messageState.trim()} onPress={()=> saveMessage()}>
                     <Ionicons name="send" size={20} color={colors.background}></Ionicons>
                   </TouchableOpacity>
               </View>

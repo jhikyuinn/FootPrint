@@ -6,9 +6,10 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import HistoryList from './historylist';
 import DesignButton from '../Components/DesignButton';
 import axios from 'axios';
-import { rooms, entered } from '../lib/gun';
+import gun, { GUN, rooms, entered, lastRead } from '../lib/gun';
 import { API_URL } from '../lib/config';
 import { readRoom, makeSecretRoom, saveRoomKey } from '../lib/secretRoom';
+import { unreadCount } from '../lib/messages';
 import common, { colors } from '../lib/styles';
 
 function Ready({alias,pair,navigation}){
@@ -20,6 +21,9 @@ function Ready({alias,pair,navigation}){
 
     // rooms this user has entered, by room name: { name, host }
     const [roomenterinfo, setRoomenterInfo] = useState({});
+    // for the unread counts, by room name: GUN time of each message, and when this user last had the room open
+    const [messageTimes, setMessageTimes] = useState({});
+    const [readAt, setReadAt] = useState({});
 
     useEffect(() => {
         const subscriptions = history()
@@ -35,6 +39,13 @@ function Ready({alias,pair,navigation}){
         if(!isEntered || watching[name]) { return }
         watching[name] = true
         setRoomenterInfo((current) => ({...current, [name]: {name: name, host: (current[name] || {}).host}}))
+        // only message times are read here; nothing is decrypted until the room is opened
+        subscriptions.push(lastRead().get(name).on((at) => setReadAt((current) => ({...current, [name]: at || 0}))))
+        subscriptions.push(gun.get(name).map().once((msg, key) => {
+          if(!msg || msg.message === undefined) { return }
+          const at = GUN.state.is(msg, 'message')
+          setMessageTimes((current) => ({...current, [name]: {...current[name], [key]: at}}))
+        }))
         subscriptions.push(rooms.get(name).on((room) => {
           if(!room) { return }
           setRoomenterInfo((current) => ({...current, [name]: {name: name, host: room.host}}))
@@ -134,7 +145,7 @@ function Ready({alias,pair,navigation}){
             <ScrollView>
               {Object.keys(roomenterinfo).length === 0 ?
                 <Text style={styles.empty}>No rooms yet. Enter a room number above.</Text> :
-                Object.values(roomenterinfo).map((room) => (<HistoryList key={room.name} room={room} navigation={navigation} />))
+                Object.values(roomenterinfo).map((room) => (<HistoryList key={room.name} room={room} unread={unreadCount(messageTimes[room.name], readAt[room.name])} navigation={navigation} />))
               }
             </ScrollView>
           </View>

@@ -97,8 +97,9 @@ function Main({navigation}) {
                 return;
               }
               setAlias(alias);
-              // the screens read the user from GUN's session (lib/session.js), so nothing secret is passed on
-              navigation.navigate("Menu");
+              // the screens read the user from GUN's session (lib/session.js), so nothing secret is passed on.
+              // reset, not navigate: this screen (and the password in its form) is dropped, and Back cannot return to it
+              navigation.reset({ index: 0, routes: [{ name: "Menu" }] });
             } catch (e) {
               alert("Login error: " + e.message);
             } finally {

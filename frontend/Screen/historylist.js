@@ -5,7 +5,7 @@ import axios from 'axios';
 import { API_URL } from '../lib/config';
 import common, { colors } from '../lib/styles';
 
-// One room of the room list: props.room = { name, host }
+// One room of the room list: props.room = { name, host }, props.unread = messages since this user last had it open
 const HistoryList = (props) => {
 
     const EntranceBtn=()=>{
@@ -40,7 +40,13 @@ const HistoryList = (props) => {
         <View style={common.card}>
             <View style={styles.info}>
                 <Text style={common.label}>ROOM</Text>
-                <Text style={[common.alarmText, styles.line]}>{props.room.name}</Text>
+                <View style={[styles.title, styles.line]}>
+                    <Text style={common.alarmText}>{props.room.name}</Text>
+                    {props.unread > 0 &&
+                    <View style={styles.badge} accessibilityLabel={props.unread + " new messages"}>
+                        <Text style={styles.badgeText}>{props.unread > 99 ? "99+" : props.unread}</Text>
+                    </View>}
+                </View>
                 <Text style={common.label}>HOST</Text>
                 <Text style={common.alarmText}>{props.room.host || "-"}</Text>
             </View>
@@ -63,6 +69,25 @@ const styles = StyleSheet.create({
     },
     line:{
         marginBottom:8,
+    },
+    title:{
+        flexDirection:"row",
+        alignItems:"center",
+    },
+    badge:{
+        marginLeft:8,
+        minWidth:22,
+        height:22,
+        borderRadius:11,
+        paddingHorizontal:6,
+        backgroundColor:colors.primary,
+        alignItems:"center",
+        justifyContent:"center",
+    },
+    badgeText:{
+        color:colors.surface,
+        fontSize:12,
+        fontWeight:"bold",
     },
     action:{
         marginLeft:14,

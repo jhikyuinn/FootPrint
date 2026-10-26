@@ -1,6 +1,6 @@
 // Run with: node lib/messages.test.mjs
 import assert from 'node:assert';
-import { byTime, hashMessages, showTime } from './messages.js';
+import { byTime, hashMessages, showTime, unreadCount } from './messages.js';
 
 const a = { key: 'a', at: 1, name: 'n1', message: 'm1', createdAt: 't1' };
 const b = { key: 'b', at: 2, name: 'n2', message: 'm2', createdAt: 't2' };
@@ -18,4 +18,9 @@ assert.notStrictEqual(hashMessages([a, b]), hashMessages([a, { ...b, createdAt: 
 assert.strictEqual(showTime(0), new Date(0).toLocaleString());
 assert.strictEqual(showTime('0'), new Date(0).toLocaleString());
 assert.strictEqual(showTime('2022. 8. 12. 오후 3:00:00'), '2022. 8. 12. 오후 3:00:00');
+// unread: only messages after the last read time; none before the read time has loaded; a never-read room counts all
+assert.strictEqual(unreadCount({ x: 1, y: 5, z: 9 }, 4), 2);
+assert.strictEqual(unreadCount({ x: 1, y: 5 }, undefined), 0);
+assert.strictEqual(unreadCount({ x: 1, y: 5 }, 0), 2);
+assert.strictEqual(unreadCount(undefined, 0), 0);
 console.log('ok');

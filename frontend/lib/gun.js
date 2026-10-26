@@ -20,6 +20,8 @@ const gun = new GUN(GUN_PEER);
 // entered.get(alias).get(name) = true for every room that user has entered
 export const rooms = gun.get('footprint/rooms');
 export const entered = gun.get('footprint/entered');
+// lastRead().get(name) = GUN time this user last had the room open (in the user's own space)
+export const lastRead = () => gun.user().get('lastread');
 
 // shortcut: GUN has no "everything arrived" signal, so reads wait this long for peers; raise it on slow networks
 export const WAIT = 1000;
