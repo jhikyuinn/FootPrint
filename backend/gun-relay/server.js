@@ -9,6 +9,7 @@ const server = http.createServer((req, res) => {
   res.end('FootPrint gun relay\n');
 });
 
-Gun({ web: server.listen(port), peers });
+// axe: false: with AXE on, this relay did not pass messages between the app's clients, so rooms only updated on re-entry
+Gun({ web: server.listen(port), peers, axe: false });
 
 console.log('Relay peer started on port ' + port + ' with /gun');
