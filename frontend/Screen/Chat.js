@@ -10,7 +10,7 @@ import Message from '../Components/Message';
 import DesignButton from '../Components/DesignButton';
 import gun, { GUN, SEA, entered, lastRead, WAIT, readOnce } from '../lib/gun';
 import { insertByTime, hashMessages, showTime } from '../lib/messages';
-import { readRoom, unlockRoom, saveRoomKey, loadRoomKey, findUserEpub, sealKeyFor } from '../lib/secretRoom';
+import { readRoom, roomHistory, recordedPubs, unlockRoom, saveRoomKey, loadRoomKey, findUserEpub, sealKeyFor } from '../lib/secretRoom';
 import common, { colors, fonts } from '../lib/styles';
 
 const initialState = {
@@ -54,6 +54,8 @@ function Chat({route,navigation,alias,pair}){
     const subscriptions = useRef([]);
     // bumped on leave: async work started for an earlier visit sees it changed and stops
     const visit = useRef(0);
+    // the public keys the ledger has recorded in the room (a promise, set by getMessage)
+    const ledgerPubs = useRef(Promise.resolve([]));
 
     useEffect(() => {
       prepare();
@@ -121,12 +123,16 @@ function Chat({route,navigation,alias,pair}){
   // Each member's messages are in their user space (~pub/msgs/room), where only their key can write,
   // so the sender is known: no signature check against every member, and the name is the signed account alias.
   // One subscription per member feeds the member list, the screen and the room hash.
+  // Members come from the room's index in GUN (live, but anyone can remove an entry) and from the ledger
+  // (its records cannot be removed), so a member taken off the index still shows.
   // shortcut: aliases are not unique in GUN, so another account can take the same alias; show part of the key if that is abused
   function getMessage() {
     const current = visit.current;
-    listen(gun.get(room).get('members').map()).once(async (isMember, pub) => {
+    const members = {};
+    const addMember = async (pub) => {
       // only a real public key: SEA rejects unsigned writes under it, but a soul like ~x is writable by anyone
-      if(current !== visit.current || !isMember || SEA.opt.pub('~' + pub) !== pub) { return; }
+      if(current !== visit.current || members[pub] || SEA.opt.pub('~' + pub) !== pub) { return; }
+      members[pub] = true;
       const user = await readOnce(gun.get('~' + pub));
       if(current !== visit.current || !user || !user.alias || !user.epub) { return; }
       // GUN answers one member at a time, after this returns: add each one through state so the list redraws
@@ -147,7 +153,10 @@ function Chat({route,navigation,alias,pair}){
           createdAt: showTime(time),
         });
       });
-    });
+    };
+    listen(gun.get(room).get('members').map()).once((isMember, pub) => { if(isMember) { addMember(pub); } });
+    ledgerPubs.current = roomHistory(room).then(recordedPubs).catch(() => []);
+    ledgerPubs.current.then((pubs) => pubs.forEach(addMember));
   }
 
   const roomHash = () => hashMessages(Object.values(stored.current));
@@ -169,7 +178,7 @@ function Chat({route,navigation,alias,pair}){
     }
     const hash = roomHash();
       //개설되어있는 방인지 확인
-    axios.get(`${API_URL}/api/query/${encodeURIComponent(room)}`).then((res) => {
+    axios.get(`${API_URL}/api/query/${encodeURIComponent(room)}`).then(async (res) => {
       console.log(res.data)
       console.log(hash)
       //처음 개설되는 방 저장(방 이름, 방 개설, 호스트 이름, 입장한 이름, 당시 해시값, 저장 시간)
@@ -190,7 +199,9 @@ function Chat({route,navigation,alias,pair}){
         }
         //이미 개설되어있는 방 입장하면서 저장(방 이름, 방 입장, 호스트 이름, 입장한 이름, 당시 해시값, 저장 시간)
         else{
-          if(res.data.Hash!==hash){
+          // a member's first entry is always recorded, even with the hash unchanged: the ledger keeps them a member
+          const recorded = (await ledgerPubs.current).includes(pair.pub);
+          if(res.data.Hash!==hash || !recorded){
           return axios.post(`${API_URL}/api/recordhash`, {
             "RoomNumber":room,
             "Function":"enter",
