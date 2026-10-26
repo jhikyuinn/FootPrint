@@ -9,7 +9,7 @@ import NotificationList from './notificationlist';
 import common, { colors } from '../lib/styles';
 
 // Pending invitations sent to this user, read again every time the tab is opened
-function Notification({alias,password,pair,navigation}){
+function Notification({alias,pair,navigation}){
     const [invites, setInvites] = useState([]);
 
     useEffect(() => {
@@ -44,7 +44,7 @@ function Notification({alias,password,pair,navigation}){
       }
       setInvites((current) => current.filter((item) => item !== invite))
       if(accepted) {
-        navigation.navigate("Chat", { alias: alias, roomState: {RoomState: invite.RoomNumber}, pair: pair })
+        navigation.navigate("Chat", { room: invite.RoomNumber })
       }
     }
 

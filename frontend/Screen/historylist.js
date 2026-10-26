@@ -9,11 +9,7 @@ import common, { colors } from '../lib/styles';
 const HistoryList = (props) => {
 
     const EntranceBtn=()=>{
-        props.navigation.navigate("Chat", {
-            alias:props.alias,
-            roomState: {"RoomState":props.room.name},
-            pair: props.pair
-        });
+        props.navigation.navigate("Chat", { room: props.room.name });
     }
 
     // every record the ledger holds for this room

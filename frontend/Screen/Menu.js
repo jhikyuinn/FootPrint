@@ -11,10 +11,8 @@ import { colors } from '../lib/styles';
 // created once: a navigator created during render remounts every tab on each render
 const Tab = createBottomTabNavigator();
 
-function Menu({route,navigation}){
-    const {alias}=route.params
-    const {pair}=route.params
-    const {password}=route.params
+// alias and pair come from the session (withSession in App.js), not from navigation params
+function Menu({alias,pair}){
 
     return(
     <>
@@ -60,7 +58,7 @@ function Menu({route,navigation}){
                 color:"black"
                 }
             }} 
-            children={({navigation})=><Notification alias={alias} password={password} pair={pair} navigation={navigation}/>} 
+            children={({navigation})=><Notification alias={alias} pair={pair} navigation={navigation}/>} 
         />
         <Tab.Screen 
             name="Ready" 
@@ -70,7 +68,7 @@ function Menu({route,navigation}){
             color:"black"
             }
             }} 
-            children={({navigation})=><Ready alias={alias} password={password} pair={pair} navigation={navigation}/>} 
+            children={({navigation})=><Ready alias={alias} pair={pair} navigation={navigation}/>} 
         />
         <Tab.Screen 
             name="User" 
@@ -80,7 +78,7 @@ function Menu({route,navigation}){
             color:"black"
             }
         }} 
-        children={({navigation})=><User alias={alias} password={password} pair={pair}  navigation={navigation}/>} 
+        children={({navigation})=><User alias={alias} navigation={navigation}/>} 
         />
     </Tab.Navigator>
     </>
