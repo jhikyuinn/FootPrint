@@ -1,8 +1,9 @@
 import {View, Text, StyleSheet} from 'react-native';
 import { colors, fonts } from '../lib/styles';
 
-function Message({message, name}) {
-    const isSender = message.name === name;
+// mine: the message was sent by this account (by key, since two accounts can share a name)
+function Message({message, mine}) {
+    const isSender = mine;
 
     return (
         <View style={[styles.message, isSender ? styles.message_sender : styles.message_receiver]}>
