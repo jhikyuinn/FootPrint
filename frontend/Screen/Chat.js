@@ -251,12 +251,9 @@ function Chat({route,navigation}){
       return "The current chat matches none of the recorded hashes."
     }
 
+    // back to the tab the room was opened from; 'Ready' is nested in Menu, so navigate('Ready') is not handled here
     function Back(){
-      navigation.navigate('Ready',{
-      alias: alias,
-      roomState: "",
-      pair: pair
-      })
+      navigation.goBack()
     }
 
     const Invitation=(invitationuser)=>{

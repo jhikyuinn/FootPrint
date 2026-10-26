@@ -14,12 +14,6 @@ function Ready({alias,password,pair,navigation}){
     // rooms this user has entered, by room name: { name, host }
     const [roomenterinfo, setRoomenterInfo] = useState({});
 
-    const onChangeRoomHandler = (keyvalue,e) => {
-        setRoom({
-            [keyvalue]: e,
-        })
-    }
-
     useEffect(() => {
         // Main already logged in; a second auth while one is running makes GUN answer
         // "User is already being created or authenticated!"
@@ -63,10 +57,12 @@ function Ready({alias,password,pair,navigation}){
           })
       })
     const EntranceBtn=()=>{
+      const name = roomState.trim()
+      if(!name) { return }
       setRoom("")
         navigation.navigate("Chat", {
             alias:alias,
-            roomState: roomState,
+            roomState: {RoomState: name},
             pair: pair
         });
     }
@@ -84,7 +80,7 @@ function Ready({alias,password,pair,navigation}){
         />
         <View style={[common.screen, styles.screen]} >
           <View style={styles.row}>
-          <TextInput  style={[common.input, styles.input]} type="text" placeholder="Room Number" placeholderTextColor={colors.subtext} value={roomState} name="Roomnumber" onChangeText={(e) => onChangeRoomHandler("RoomState", e)}/>
+          <TextInput  style={[common.input, styles.input]} type="text" placeholder="Room Number" placeholderTextColor={colors.subtext} value={roomState} name="Roomnumber" onChangeText={setRoom}/>
           <TouchableOpacity style={styles.searchBtn} onPress={() => EntranceBtn()}>
               <Ionicons name="search-outline" size={24} color={"white"}/>
           </TouchableOpacity>
