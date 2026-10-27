@@ -5,10 +5,9 @@ import { Header } from 'react-native-elements';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import HistoryList from './historylist';
 import DesignButton from '../Components/DesignButton';
-import axios from 'axios';
 import gun, { GUN, SEA, entered, lastRead } from '../lib/gun';
-import { API_URL } from '../lib/config';
-import { queryRoom, roomHistory, recordedPubs, makeSecretRoom, saveRoomKey } from '../lib/secretRoom';
+import { queryRoom, roomHistory, recordedPubs, recordHash } from '../lib/ledger';
+import { makeSecretRoom, saveRoomKey } from '../lib/secretRoom';
 import { unreadCount, hashMessages } from '../lib/messages';
 import common, { colors } from '../lib/styles';
 
@@ -117,7 +116,7 @@ function Ready({alias,pair,navigation}){
       // and tells everyone where the info is (HostPub)
       gun.user().get('rooms').get(newRoom).put(info)
       try {
-        await axios.post(`${API_URL}/api/recordhash`, {
+        await recordHash({
           "RoomNumber": newRoom,
           "Function": "create",
           "HostID": alias,
@@ -125,7 +124,6 @@ function Ready({alias,pair,navigation}){
           "PostID": alias,
           "PostPub": pair.pub,
           "Hash": hashMessages([]),
-          "DateTime": Date().toLocaleString(),
         })
       } catch (e) {
         alert("Could not create the room: " + e.message)

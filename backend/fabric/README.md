@@ -8,7 +8,7 @@ The FootPrint-specific parts of the Fabric backend, extracted from
 | Path | What it is |
 | --- | --- |
 | `chaincode/P2Pmessage/javascript` | The chaincode (`lib/Record.js`): `initLedger`, `queryRecord`, `queryAllRecords`, `queryHistory`, `recordHash` |
-| `apiserver` | Express REST server the app calls, plus `enrollAdmin`, `registerUser`, `invoke` and the block listener `cpListener` |
+| `apiserver` | Express REST server the app calls, plus the setup scripts `enrollAdmin` and `registerUser` |
 | `startFabric.sh` / `networkDown.sh` | Start the test network and deploy the chaincode as `P2Pmessage` / stop it |
 
 ## Running

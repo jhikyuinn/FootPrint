@@ -1,8 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View, TextInput,KeyboardAvoidingView,TouchableOpacity, ScrollView} from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import axios from 'axios';
-import { API_URL } from '../lib/config';
+import { roomHistory } from '../lib/ledger';
 import common, { colors } from '../lib/styles';
 
 // One room of the room list: props.room = { name, host }, props.unread = messages since this user last had it open
@@ -14,20 +13,19 @@ const HistoryList = (props) => {
 
     // every record the ledger holds for this room
     const RecordBtn=()=>{
-        axios.get(`${API_URL}/api/history/${encodeURIComponent(props.room.name)}`, {
-        }).then((res) => {
-            if(res.data.length === 0) {
+        roomHistory(props.room.name).then((records) => {
+            if(records.length === 0) {
                 alert("No ledger records for " + props.room.name);
                 return;
             }
-            const Roomhistory=res.data.map((records, idx)=>
+            const Roomhistory=records.map((record, idx)=>
                 (idx+1)+" Record.\n"+
-                "TxId: "+records.TxId+"\n"+
-                "Function: "+records.Value.function+"\n"+
-                "Hostid: "+records.Value.hostid+"\n"+
-                "Postid: "+records.Value.postid+"\n"+
-                "Hash: "+records.Value.hash+"\n"+
-                "Datetime: "+records.Value.datetime
+                "TxId: "+record.TxId+"\n"+
+                "Function: "+record.Value.function+"\n"+
+                "Hostid: "+record.Value.hostid+"\n"+
+                "Postid: "+record.Value.postid+"\n"+
+                "Hash: "+record.Value.hash+"\n"+
+                "Datetime: "+record.Value.datetime
             )
             alert(Roomhistory.join("\n\n"))
         }).catch((err) => {

@@ -29,19 +29,7 @@ function App() {
                 })
             }}>
                 <Stack.Screen name="Main" component={Main} />
-                <Stack.Screen 
-                    name="Menu" 
-                    component={MenuScreen} 
-                    options={{
-                        title: 'Ready',
-                        headerStyle: {
-                        backgroundColor: '#f4511e',
-                        },
-                        headerTintColor: '#fff',
-                        headerTitleStyle: {
-                        fontWeight: 'bold',
-                        },
-                    }}/>
+                <Stack.Screen name="Menu" component={MenuScreen} options={{ title: 'Ready' }}/>
                 <Stack.Screen name="Chat" component={ChatScreen} />
             </Stack.Navigator>
         </NavigationContainer>

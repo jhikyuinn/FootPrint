@@ -82,6 +82,36 @@ export default StyleSheet.create({
     padding: 16,
     marginBottom: 12,
   },
+  // a full-screen sheet over the chat (password screen, Check Hash): its header, title and one-line summary
+  sheet:{
+    position:"absolute",
+    top:0,
+    bottom:0,
+    left:0,
+    right:0,
+    backgroundColor:colors.background,
+    paddingHorizontal:16,
+    paddingTop:50,
+  },
+  sheetHead:{
+    flexDirection:"row",
+    alignItems:"center",
+    justifyContent:"space-between",
+    marginBottom:16,
+  },
+  sheetTitle:{
+    fontSize:26,
+    fontWeight:'bold',
+    fontFamily:fonts.serif,
+    color:colors.text,
+  },
+  sheetSummary:{
+    fontSize:15,
+    fontWeight:'600',
+    color:colors.accent,
+    marginTop:14,
+    marginBottom:22,
+  },
   alarmText:{
     fontSize:17,
     color: colors.text,
