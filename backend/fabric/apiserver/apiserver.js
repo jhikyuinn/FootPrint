@@ -109,6 +109,8 @@ app.get('/api/history/:roomState', async function (req,res){
                 postpub: entry.Value.PostPub,
                 seq: entry.Value.Seq,
                 hash: entry.Value.Hash,
+                prevhash: entry.Value.PrevHash,
+                count: entry.Value.Count,
                 datetime: entry.Value.DateTime,
             },
         }));
@@ -121,13 +123,14 @@ app.get('/api/history/:roomState', async function (req,res){
 app.post('/api/recordhash', async function(req, res){
     try{
         // Seq is the record number the app expects to write; leave it out to append. The time is the transaction's.
-        const { HostID, RoomNumber, Hash, Function, PostID, HostPub, PostPub, Seq } = req.body;
+        // Hash covers the room's first Count messages and builds on PrevHash, the room's last hash.
+        const { HostID, RoomNumber, Hash, Function, PostID, HostPub, PostPub, Seq, PrevHash, Count } = req.body;
         if (!HostID || !RoomNumber) {
             res.status(400).json({ error: 'HostID and RoomNumber are required' });
             return;
         }
         const contract = await getContract();
-        await contract.submitTransaction('recordHash', HostID, RoomNumber, Hash || '', Function || 'record', PostID || HostID, HostPub || '', PostPub || '', Seq === undefined ? '' : String(Seq));
+        await contract.submitTransaction('recordHash', HostID, RoomNumber, Hash || '', Function || 'record', PostID || HostID, HostPub || '', PostPub || '', Seq === undefined ? '' : String(Seq), PrevHash || '', String(Count || 0));
         console.log(`Transaction has been submitted`);
         res.send(req.body);
     }

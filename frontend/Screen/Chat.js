@@ -9,7 +9,7 @@ import Message from '../Components/Message';
 import DesignButton from '../Components/DesignButton';
 import LedgerSheet from '../Components/LedgerSheet';
 import gun, { GUN, SEA, entered, lastRead, readOnce } from '../lib/gun';
-import { insertByTime, hashMessages, showTime } from '../lib/messages';
+import { insertByTime, hashMessages, hashFirst, showTime } from '../lib/messages';
 import { queryRoom, roomHistory, recordedPubs, recordHash } from '../lib/ledger';
 import { readRoom, unlockRoom, saveRoomKey, loadRoomKey, aliasAccounts, findUserEpub, sealKeyFor } from '../lib/secretRoom';
 import common, { colors, fonts } from '../lib/styles';
@@ -173,10 +173,11 @@ function Chat({route,navigation,alias,pair}){
   const roomHash = () => hashMessages(Object.values(stored.current));
 
   // Writes a record of this room by this user; latest is the room's latest ledger record.
+  // chain is { PrevHash, Count } for a hashed record: the last hash it builds on and how many messages it covers.
   // A room the ledger does not know yet (its create from Ready failed) is recorded here as a free room:
   // its info goes in this user's space, where the create record (HostPub) points, or it could not be opened again.
-  const record = (fn, latest, hash) => {
-    const by = { RoomNumber: room, PostID: alias, PostPub: pair.pub, Hash: hash };
+  const record = (fn, latest, hash, chain = {}) => {
+    const by = { RoomNumber: room, PostID: alias, PostPub: pair.pub, Hash: hash, ...chain };
     if(latest !== "None") { return recordHash({ ...by, Function: fn, HostID: latest.HostID }); }
     gun.user().get('rooms').get(room).put({ name: room, host: alias, createdAt: Date.now(), secret: false });
     return recordHash({ ...by, Function: "create", HostID: alias, HostPub: pair.pub });
@@ -220,13 +221,20 @@ function Chat({route,navigation,alias,pair}){
     }
   }
 
-  // Records the current room hash, unless it is already the latest one on the ledger
+  // Records the current room hash, unless it is already the latest one on the ledger,
+  // or the chat no longer starts with the messages the last hash covers (then it was changed, and is not recorded)
   const onHashMessage = async () => {
-    const hash = roomHash();
+    const list = Object.values(stored.current);
+    const hash = hashMessages(list);
     try {
       const latest = await queryRoom(room);
-      if(latest !== "None" && latest.Hash === hash) { alert("Same Hash is already recorded"); return; }
-      await record("record", latest, hash);
+      const last = latest === "None" ? { LastHash: "", LastCount: 0 } : latest;
+      if(last.LastHash === hash) { alert("Same Hash is already recorded"); return; }
+      if(last.LastHash && hashFirst(list, last.LastCount) !== last.LastHash) {
+        alert("Earlier messages differ from the last recorded hash, so the chat was not recorded.");
+        return;
+      }
+      await record("record", latest, hash, { PrevHash: last.LastHash, Count: list.length });
       alert("Hash Recorded: \n" + hash);
     } catch(err) {
       alert("Record Hash: " + err.message);
@@ -239,7 +247,7 @@ function Chat({route,navigation,alias,pair}){
     try {
       const records = await roomHistory(room);
       setIsModalVisible(false);
-      setLedger({ hash, records });
+      setLedger({ hash, records, messages: Object.values(stored.current) });
     } catch(err) {
       alert("Check Hash: " + err.message);
     }
@@ -373,7 +381,7 @@ function Chat({route,navigation,alias,pair}){
               </View>
           </View>
           </KeyboardAvoidingView>
-          {ledger && <LedgerSheet hash={ledger.hash} records={ledger.records} onClose={() => setLedger(null)}/>}
+          {ledger && <LedgerSheet hash={ledger.hash} records={ledger.records} messages={ledger.messages} onClose={() => setLedger(null)}/>}
       </View>
 
     )

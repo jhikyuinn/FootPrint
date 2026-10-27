@@ -1,6 +1,6 @@
 // Run with: node lib/messages.test.mjs
 import assert from 'node:assert';
-import { byTime, hashMessages, insertByTime, showTime, unreadCount } from './messages.js';
+import { byTime, checkRecords, hashFirst, hashMessages, insertByTime, showTime, unreadCount } from './messages.js';
 
 const a = { key: 'a', at: 1, name: 'n1', message: 'm1', createdAt: 't1' };
 const b = { key: 'b', at: 2, name: 'n2', message: 'm2', createdAt: 't2' };
@@ -27,4 +27,12 @@ assert.strictEqual(unreadCount({ x: 1, y: 5, z: 9 }, 4), 2);
 assert.strictEqual(unreadCount({ x: 1, y: 5 }, undefined), 0);
 assert.strictEqual(unreadCount({ x: 1, y: 5 }, 0), 2);
 assert.strictEqual(unreadCount(undefined, 0), 0);
+// records cover the first count messages: adding messages keeps old records matching,
+// changing an old message breaks every record that covers it
+const d = { key: 'd', at: 3, name: 'n4', message: 'm4', createdAt: 't4' };
+const rec = (hash, count) => ({ Value: { hash, count } });
+const records = [rec(hashMessages([]), 0), rec(hashFirst([a, b], 1), 1), rec(hashMessages([a, b]), 2), rec('', 0), rec(hashMessages([a, b, c]), 3)];
+assert.strictEqual(hashFirst([c, b, a], 2), hashMessages([a, b]));
+assert.deepStrictEqual(checkRecords([a, b, c, d], records), [true, true, true, null, true]);
+assert.deepStrictEqual(checkRecords([a, { ...b, message: 'x' }, c, d], records), [true, true, false, null, false]);
 console.log('ok');

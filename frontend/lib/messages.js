@@ -16,6 +16,16 @@ export const insertByTime = (list, m) => {
 export const hashMessages = (list) =>
   CryptoJS.SHA256(JSON.stringify([...list].sort(byTime).map((m) => [m.name, m.message, m.createdAt]))).toString();
 
+// Hash of the room's first count messages in time order. A record covers the chat as it was when recorded,
+// so messages added later do not change it, but changing an earlier message does.
+export const hashFirst = (list, count) => hashMessages([...list].sort(byTime).slice(0, count));
+
+// For each ledger record (oldest first), whether the chat still hashes to it: null for a record without a hash.
+// shortcut: a message sent before a record but synced to the recorder only after it lands inside the record's
+// first count messages and reads as a change; storing the covered message keys would tell them apart.
+export const checkRecords = (list, records) =>
+  records.map((r) => (r.Value.hash ? hashFirst(list, r.Value.count) === r.Value.hash : null));
+
 // Messages newer than readAt; nothing while readAt has not loaded yet, so a room does not flash as all unread.
 // times: { messageKey: GUN time of the message }, readAt: GUN time this user last had the room open
 export const unreadCount = (times, readAt) =>

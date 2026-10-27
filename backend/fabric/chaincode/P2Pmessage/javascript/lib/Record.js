@@ -9,7 +9,8 @@
 const { Contract } = require('fabric-contract-api');
 
 // A room's records live under their own keys (record, room, seq) that are written once and never replaced.
-// The room key only keeps what later records need: the host, the record count and the last hash.
+// The room key only keeps what later records need: the host, the record count and the last hash
+// with the message count it covers.
 const recordKey = (ctx, room, seq) => ctx.stub.createCompositeKey('record', [room, String(seq).padStart(10, '0')]);
 
 async function readJSON(ctx, key) {
@@ -17,12 +18,14 @@ async function readJSON(ctx, key) {
     return bytes && bytes.length > 0 ? JSON.parse(bytes.toString()) : null;
 }
 
+// The room's latest record, with the last hash and its message count (a latest enter record has no hash)
 async function latestRecord(ctx, room) {
     const meta = await readJSON(ctx, room);
     if (!meta) {
         throw new Error(`${room} does not exist`);
     }
-    return readJSON(ctx, recordKey(ctx, room, meta.Count - 1));
+    const record = await readJSON(ctx, recordKey(ctx, room, meta.Count - 1));
+    return { ...record, LastHash: meta.LastHash, LastCount: meta.LastCount };
 }
 
 class Record extends Contract {
@@ -52,16 +55,18 @@ class Record extends Contract {
     // HostPub and PostPub are the public keys of the host and of PostID (empty from older clients).
     // Seq is the record number the caller expects to write; empty appends. A taken Seq is rejected,
     // so two callers recording the same state cannot both succeed.
+    // Hash covers the first Count messages of the room. A record names the last hash it builds on (PrevHash),
+    // so a record made without seeing the latest one is rejected, and Count can only grow.
     // (Invitations used to be written here too; they now have their own key, see invite.)
-    async recordHash(ctx, HostID, RoomNumber, Hash, Function, PostID, HostPub, PostPub, Seq) {
+    async recordHash(ctx, HostID, RoomNumber, Hash, Function, PostID, HostPub, PostPub, Seq, PrevHash, Count) {
         const meta = await readJSON(ctx, RoomNumber);
-        const count = meta ? meta.Count : 0;
-        if (Seq !== undefined && Seq !== '' && Number(Seq) !== count) {
-            throw new Error(`Record ${Seq} of ${RoomNumber} is already written (next is ${count})`);
+        const seq = meta ? meta.Count : 0;
+        if (Seq !== undefined && Seq !== '' && Number(Seq) !== seq) {
+            throw new Error(`Record ${Seq} of ${RoomNumber} is already written (next is ${seq})`);
         }
-        const key = recordKey(ctx, RoomNumber, count);
+        const key = recordKey(ctx, RoomNumber, seq);
         if (await readJSON(ctx, key)) {
-            throw new Error(`Record ${count} of ${RoomNumber} is already written`);
+            throw new Error(`Record ${seq} of ${RoomNumber} is already written`);
         }
 
         // The first record of a room fixes its host: later records keep it, whatever the caller sends,
@@ -70,7 +75,21 @@ class Record extends Contract {
             HostID = meta.HostID;
             HostPub = meta.HostPub;
             if (Function === 'create') {
+                // the room already has its first hash; a late create only makes its caller a member
                 Function = 'enter';
+                Hash = '';
+            }
+        }
+        const lastHash = meta ? meta.LastHash : '';
+        const lastCount = meta ? meta.LastCount : 0;
+        const count = Number(Count) || 0;
+        // every hashed record is checked, whatever its Function, or a caller could skip the check by naming it enter
+        if (Hash) {
+            if ((PrevHash || '') !== lastHash) {
+                throw new Error(`${RoomNumber} has a newer hash than the one this record builds on`);
+            }
+            if (count < lastCount) {
+                throw new Error(`A record of ${RoomNumber} cannot cover fewer messages (${count}) than the last one (${lastCount})`);
             }
         }
 
@@ -78,7 +97,7 @@ class Record extends Contract {
         const ts = ctx.stub.getTxTimestamp();
         const record = {
             docType: 'Record',
-            Seq: count,
+            Seq: seq,
             TxId: ctx.stub.getTxID(),
             HostID,
             HostPub: HostPub || '',
@@ -88,6 +107,9 @@ class Record extends Contract {
             PostPub: PostPub || '',
             DateTime: new Date(Number(ts.seconds.toString()) * 1000 + Math.floor(ts.nanos / 1e6)).toISOString(),
             Hash: Hash || '',
+            // only a hashed record covers messages; it builds on the last hash
+            Count: Hash ? count : 0,
+            PrevHash: Hash ? lastHash : '',
         };
         await ctx.stub.putState(key, Buffer.from(JSON.stringify(record)));
         await ctx.stub.putState(RoomNumber, Buffer.from(JSON.stringify({
@@ -95,9 +117,10 @@ class Record extends Contract {
             RoomNumber,
             HostID,
             HostPub: record.HostPub,
-            Count: count + 1,
-            // enter records may carry no hash; the last hash stays the last one that was recorded
-            LastHash: record.Hash || (meta ? meta.LastHash : ''),
+            Count: seq + 1,
+            // enter records carry no hash; the last hash stays the last one that was recorded
+            LastHash: record.Hash || lastHash,
+            LastCount: record.Hash ? record.Count : lastCount,
         })));
     }
 
