@@ -20,11 +20,22 @@ export const hashMessages = (list) =>
 // so messages added later do not change it, but changing an earlier message does.
 export const hashFirst = (list, count) => hashMessages([...list].sort(byTime).slice(0, count));
 
-// For each ledger record (oldest first), whether the chat still hashes to it: null for a record without a hash.
+// For each ledger record (oldest first), whether the chat still hashes to it: null for a record without a hash,
+// or one that covers no messages (a room's creation), which every chat matches.
 // shortcut: a message sent before a record but synced to the recorder only after it lands inside the record's
 // first count messages and reads as a change; storing the covered message keys would tell them apart.
 export const checkRecords = (list, records) =>
-  records.map((r) => (r.Value.hash ? hashFirst(list, r.Value.count) === r.Value.hash : null));
+  records.map((r) => (r.Value.hash && r.Value.count > 0 ? hashFirst(list, r.Value.count) === r.Value.hash : null));
+
+// What an automatic record of list writes after latest (the room's latest ledger record, or "None"), or null
+// when it should not record: fewer than min new messages, or a chat that no longer starts with the messages
+// the last hash covers (still syncing, or changed). Seq and PrevHash name the state it builds on, so when
+// several members record at once the ledger keeps one and rejects the others.
+export const nextRecord = (list, latest, min) => {
+  if(latest === "None" || list.length - latest.LastCount < min) { return null; }
+  if(hashFirst(list, latest.LastCount) !== latest.LastHash) { return null; }
+  return { Hash: hashMessages(list), PrevHash: latest.LastHash, Count: list.length, Seq: latest.Seq + 1 };
+};
 
 // Messages newer than readAt; nothing while readAt has not loaded yet, so a room does not flash as all unread.
 // times: { messageKey: GUN time of the message }, readAt: GUN time this user last had the room open

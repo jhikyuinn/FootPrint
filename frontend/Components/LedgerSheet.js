@@ -3,7 +3,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import common, { colors, fonts } from '../lib/styles';
 import { checkRecords } from '../lib/messages';
 
-// Says whether the chat still matches its records. matches[i] is null for a record without a hash (entries).
+// Says whether the chat still matches its records. matches[i] is null for a record that is not checked
+// (entries without a hash, the room's creation).
 function summary(hash, records, matches) {
   const hashed = records.filter((record, i) => matches[i] !== null);
   if(hashed.length === 0) { return "No hash has been recorded for this room yet."; }
