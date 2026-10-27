@@ -48,7 +48,7 @@ function Main({navigation}) {
   }, [])
 
   const createUser = () => 
-    new Promise((resolve, reject) => {
+    new Promise((resolve) => {
         const finish = settleOnce(resolve, "Sign up");
         gun.user().create(userForm.alias, userForm.password, async res => {
             // wait for the account to be created before telling the user to log in
@@ -63,7 +63,7 @@ function Main({navigation}) {
 
 
   const authUser = () =>
-    new Promise((resolve, reject) => {
+    new Promise((resolve) => {
         const alias = userForm.alias;
         const password = userForm.password;
         let handled = false;

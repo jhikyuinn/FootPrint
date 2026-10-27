@@ -1,16 +1,17 @@
-import React, {useState,useEffect,useReducer,useRef} from 'react';
+import {useState,useEffect,useReducer,useRef} from 'react';
 import axios from 'axios';
 import { API_URL } from '../lib/config';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import {Modal, View, Text,TextInput,StyleSheet,ScrollView, KeyboardAvoidingView, ActivityIndicator, Platform} from 'react-native';
+import {Modal, View, Text,TextInput,StyleSheet,ScrollView, KeyboardAvoidingView, ActivityIndicator, Platform, TouchableOpacity} from 'react-native';
 import { Header } from 'react-native-elements';
-import { TouchableOpacity } from 'react-native';
 
 import Message from '../Components/Message';
 import DesignButton from '../Components/DesignButton';
-import gun, { GUN, SEA, entered, lastRead, WAIT, readOnce } from '../lib/gun';
+import LedgerSheet from '../Components/LedgerSheet';
+import gun, { GUN, SEA, entered, lastRead, readOnce } from '../lib/gun';
 import { insertByTime, hashMessages, showTime } from '../lib/messages';
-import { readRoom, roomHistory, recordedPubs, unlockRoom, saveRoomKey, loadRoomKey, aliasAccounts, findUserEpub, sealKeyFor } from '../lib/secretRoom';
+import { queryRoom, roomHistory, recordedPubs, recordHash } from '../lib/ledger';
+import { readRoom, unlockRoom, saveRoomKey, loadRoomKey, aliasAccounts, findUserEpub, sealKeyFor } from '../lib/secretRoom';
 import common, { colors, fonts } from '../lib/styles';
 
 const initialState = {
@@ -60,13 +61,18 @@ function Chat({route,navigation,alias,pair}){
     useEffect(() => {
       prepare();
       return () => {
-        // everything that arrived while the room was open has been seen
-        lastRead().get(room).put(GUN.state());
         visit.current++;
         subscriptions.current.forEach((subscription) => subscription.off());
         subscriptions.current = [];
       };
     }, [room]);
+
+    // everything that arrived while the room was open has been seen; a room left at its password screen
+    // (or sent back before opening) was not, so its unread count stays
+    useEffect(() => {
+      if(!opened) { return; }
+      return () => lastRead().get(room).put(GUN.state());
+    }, [opened, room]);
 
     // keeps a listener so leaving the room turns it off
     // shortcut: GUN's off() does not detach map().once, so a left room's callback still runs once per new message and returns at the visit check; switch to on() with per-event off if that ever costs
@@ -96,9 +102,9 @@ function Chat({route,navigation,alias,pair}){
   function start() {
     setOpened(true);
     lastRead().get(room).put(GUN.state());
-    onInitHash();
     initRoom();
     getMessage();
+    recordEntry();
   }
 
   async function unlock() {
@@ -167,66 +173,26 @@ function Chat({route,navigation,alias,pair}){
 
   const roomHash = () => hashMessages(Object.values(stored.current));
 
-  // A room first recorded from here (not from Ready) is a free room. Its info goes in this user's space,
-  // where the create record (HostPub) points; otherwise the room could not be opened again.
-  const saveFreeRoomInfo = () => gun.user().get('rooms').get(room).put({ name: room, host: alias, createdAt: Date.now(), secret: false });
+  // Writes a record of this room by this user; latest is the room's latest ledger record.
+  // A room the ledger does not know yet (its create from Ready failed) is recorded here as a free room:
+  // its info goes in this user's space, where the create record (HostPub) points, or it could not be opened again.
+  const record = (fn, latest, hash) => {
+    const by = { RoomNumber: room, PostID: alias, PostPub: pair.pub, Hash: hash };
+    if(latest !== "None") { return recordHash({ ...by, Function: fn, HostID: latest.HostID }); }
+    gun.user().get('rooms').get(room).put({ name: room, host: alias, createdAt: Date.now(), secret: false });
+    return recordHash({ ...by, Function: "create", HostID: alias, HostPub: pair.pub });
+  };
 
-  const onInitHash = async ()=>{
-    // the room has just been opened: members, then their messages arrive and are decrypted one by one,
-    // so hash once no message has been added for WAIT ms
-    // shortcut: gives up waiting after 10 * WAIT in a room that never goes quiet; count pending reads if that hashes too early
-    const current = visit.current;
-    let count = -1;
-    for(let i = 0; i < 10 && count !== Object.keys(stored.current).length; i++) {
-      count = Object.keys(stored.current).length;
-      await new Promise((resolve) => setTimeout(resolve, WAIT));
-      if(current !== visit.current) { return; }
+  // Records the room's creation, or this user's first entry (the ledger keeps them a member), without a hash:
+  // right after opening, messages are still syncing, and a hash of only part of them would become the
+  // room's latest ledger hash. Hashes are recorded with Record Hash, once the chat has loaded.
+  const recordEntry = async () => {
+    try {
+      const latest = await queryRoom(room);
+      if(latest === "None" || !(await ledgerPubs.current).includes(pair.pub)) { await record("enter", latest, ""); }
+    } catch(err) {
+      alert("Room record: " + err.message);
     }
-    const hash = roomHash();
-      //개설되어있는 방인지 확인
-    axios.get(`${API_URL}/api/query/${encodeURIComponent(room)}`).then(async (res) => {
-      console.log(res.data)
-      console.log(hash)
-      //처음 개설되는 방 저장(방 이름, 방 개설, 호스트 이름, 입장한 이름, 당시 해시값, 저장 시간)
-        if(res.data=="None"){
-          saveFreeRoomInfo();
-          return axios.post(`${API_URL}/api/recordhash`, {
-            "RoomNumber":room,
-            "Function":"create",
-            "HostID": alias,
-            "HostPub": pair.pub,
-            "PostID": alias,
-            "PostPub": pair.pub,
-            "Hash":hash,
-            "DateTime":Date().toLocaleString()
-          }).then((res) => {
-            alert("Room create hash: \n"+res.data.Hash);
-          })
-        }
-        //이미 개설되어있는 방 입장하면서 저장(방 이름, 방 입장, 호스트 이름, 입장한 이름, 당시 해시값, 저장 시간)
-        else{
-          // a member's first entry is always recorded, even with the hash unchanged: the ledger keeps them a member
-          const recorded = (await ledgerPubs.current).includes(pair.pub);
-          if(res.data.Hash!==hash || !recorded){
-          return axios.post(`${API_URL}/api/recordhash`, {
-            "RoomNumber":room,
-            "Function":"enter",
-            "HostID": res.data.HostID,
-            "PostID": alias,
-            "PostPub": pair.pub,
-            "Hash":hash,
-            "DateTime":Date().toLocaleString()
-          }).then((res) => {
-            alert("Room enter hash: \n"+res.data.Hash);
-          })
-        }
-        else{
-          alert("Same Hash is already recorded");
-        }
-        }
-      }).catch((err) => {
-        alert("Room hash: "+err.message)
-      });
   }
 
   async function saveMessage() {
@@ -255,57 +221,30 @@ function Chat({route,navigation,alias,pair}){
     }
   }
 
-    //블록체인에 총 메세지의 해쉬값 전달 완성
-    const onHashMessage = async () => {
+  // Records the current room hash, unless it is already the latest one on the ledger
+  const onHashMessage = async () => {
     const hash = roomHash();
-      //그 전의 메세지들의 해쉬값(블록체인에 저장되어있는 해쉬값)
-      //그전의 메세지와 현대 메세지가 동일할경우, 그전의 메세지의 값이 존재하지 않는 경우 트랜잭션 발생
-      axios.get(`${API_URL}/api/query/${encodeURIComponent(room)}`).then((res) => {
-        // the ledger has no record of this room yet (its create failed): create it now, as onInitHash does
-        const created = res.data=="None";
-        if(!created && res.data.Hash==hash){
-          alert("Same Hash is already recorded");
-        }else{
-          if(created) { saveFreeRoomInfo(); }
-          return axios.post(`${API_URL}/api/recordhash`, {
-                "RoomNumber":room,
-                "Function":created ? "create" : "record",
-                "HostID": created ? alias : res.data.HostID,
-                "HostPub": created ? pair.pub : "",
-                "PostID": alias,
-                "PostPub": pair.pub,
-                "Hash":hash,
-                "DateTime":Date().toLocaleString()
-          }).then((res) => {
-            alert("Hash Recorded: \n"+res.data.Hash);
-          })
-        }
-    }).catch((err) => {
-      alert("Record Hash: "+err.message)
-    })
+    try {
+      const latest = await queryRoom(room);
+      if(latest !== "None" && latest.Hash === hash) { alert("Same Hash is already recorded"); return; }
+      await record("record", latest, hash);
+      alert("Hash Recorded: \n" + hash);
+    } catch(err) {
+      alert("Record Hash: " + err.message);
+    }
   }
 
-    //블록체인에 저장되어있는 해쉬값 호출
-    async function onQueryHash(){
+  // Opens the Check Hash sheet: the current hash next to every record of the room, not only the latest one
+  async function onQueryHash() {
     const hash = roomHash();
-        // every record of the room, not only the latest one
-        axios.get(`${API_URL}/api/history/${encodeURIComponent(room)}`).then((res) => {
-          setIsModalVisible(false)
-          setLedger({hash: hash, records: res.data})
-        }).catch((err) => {
-          alert("Check Hash: "+err.message)
-        })
+    try {
+      const records = await roomHistory(room);
+      setIsModalVisible(false);
+      setLedger({ hash, records });
+    } catch(err) {
+      alert("Check Hash: " + err.message);
     }
-
-    // Says which ledger record the current chat matches. Invitations carry no hash, so they are skipped.
-    function ledgerSummary(){
-      const hashed = ledger.records.filter((record) => record.Value.hash)
-      if(hashed.length === 0) { return "No hash has been recorded for this room yet." }
-      if(hashed[hashed.length-1].Value.hash === ledger.hash) { return "The current chat matches the latest recorded hash." }
-      const match = ledger.records.findIndex((record) => record.Value.hash === ledger.hash)
-      if(match !== -1) { return "The current chat matches record #"+(match+1)+", but newer hashes were recorded after it." }
-      return "The current chat matches none of the recorded hashes."
-    }
+  }
 
     // back to the tab the room was opened from; 'Ready' is nested in Menu, so navigate('Ready') is not handled here
     function Back(){
@@ -339,22 +278,18 @@ function Chat({route,navigation,alias,pair}){
       setIsModalVisible(!isModalVisible)
     }
 
-    const onChange = (keyvalue, e) => {
-      setMessage(e)
-    }  
-
     // Before the room is open: a spinner while its type is read, or the password screen of an encrypted room
     if(!opened) {
       return(
-        <View style={styles.ledger}>
-          <View style={styles.ledgerHead}>
-            <Text style={styles.ledgerTitle}>{gate ? "Encrypted room" : room}</Text>
+        <View style={common.sheet}>
+          <View style={common.sheetHead}>
+            <Text style={common.sheetTitle}>{gate ? "Encrypted room" : room}</Text>
             <TouchableOpacity onPress={Back}>
               <Ionicons name="close-outline" size={30} color={colors.text} />
             </TouchableOpacity>
           </View>
           {gate ? <>
-            <Text style={styles.summary}>{room} is encrypted. Enter its password, or ask a member to invite you.</Text>
+            <Text style={common.sheetSummary}>{room} is encrypted. Enter its password, or ask a member to invite you.</Text>
             <TextInput style={common.input} secureTextEntry={true} placeholder="Room password" placeholderTextColor={colors.subtext} value={gatePassword} onChangeText={setGatePassword} onSubmitEditing={() => unlock()}/>
             <DesignButton text="Enter" buttonFunction={() => unlock()} height={44} bgcolor={colors.primary} color={colors.background} outline={false}/>
           </> : <ActivityIndicator color={colors.primary}/>}
@@ -432,39 +367,14 @@ function Chat({route,navigation,alias,pair}){
                   ))}
               </ScrollView>
               <View style={styles.inputBar}>
-                  <TextInput style={styles.Chatinput} type="text" placeholder="My message" placeholderTextColor={colors.subtext} value={messageState} onChangeText={(e) => onChange("messageState",e)} onSubmitEditing={() => saveMessage()} blurOnSubmit={false} returnKeyType="send"/>
+                  <TextInput style={styles.Chatinput} type="text" placeholder="My message" placeholderTextColor={colors.subtext} value={messageState} onChangeText={setMessage} onSubmitEditing={() => saveMessage()} blurOnSubmit={false} returnKeyType="send"/>
                   <TouchableOpacity style={[styles.sendBtn, !messageState.trim() && {opacity:0.5}]} disabled={!messageState.trim()} onPress={()=> saveMessage()}>
                     <Ionicons name="send" size={20} color={colors.background}></Ionicons>
                   </TouchableOpacity>
               </View>
           </View>
           </KeyboardAvoidingView>
-          {ledger &&
-          <View style={styles.ledger}>
-            <View style={styles.ledgerHead}>
-              <Text style={styles.ledgerTitle}>Ledger records</Text>
-              <TouchableOpacity onPress={() => setLedger(null)}>
-                <Ionicons name="close-outline" size={30} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-            <Text style={common.label}>CURRENT HASH</Text>
-            <Text style={styles.hash}>{ledger.hash}</Text>
-            <Text style={styles.summary}>{ledgerSummary()}</Text>
-            <Text style={[common.label, styles.ledgerCount]}>{ledger.records.length} RECORDS · NEWEST FIRST</Text>
-            <ScrollView>
-              {ledger.records.map((record, idx) => {
-                const matches = record.Value.hash !== "" && record.Value.hash === ledger.hash;
-                return (
-                  <View key={record.TxId} style={[common.card, styles.ledgerCard, !matches && styles.ledgerCardOther]}>
-                    <Text style={common.label}>#{idx+1} · {String(record.Value.function).toUpperCase()} · {record.Value.postid}</Text>
-                    <Text style={styles.time}>{new Date(record.Timestamp).toLocaleString()}</Text>
-                    <Text style={styles.hash}>{record.Value.hash || "(no hash)"}</Text>
-                    {matches && <Text style={styles.match}>✓ MATCHES THE CURRENT CHAT</Text>}
-                  </View>
-                );
-              }).reverse()}
-            </ScrollView>
-          </View>}
+          {ledger && <LedgerSheet hash={ledger.hash} records={ledger.records} onClose={() => setLedger(null)}/>}
       </View>
 
     )
@@ -499,68 +409,6 @@ const styles = StyleSheet.create({
   messages:{
     paddingHorizontal:14,
     paddingTop:14,
-  },
-  // the Check Hash sheet, drawn over the whole chat screen
-  ledger:{
-    position:"absolute",
-    top:0,
-    bottom:0,
-    left:0,
-    right:0,
-    backgroundColor:colors.background,
-    paddingHorizontal:16,
-    paddingTop:50,
-  },
-  ledgerHead:{
-    flexDirection:"row",
-    alignItems:"center",
-    justifyContent:"space-between",
-    marginBottom:16,
-  },
-  ledgerTitle:{
-    fontSize:26,
-    fontWeight:'bold',
-    fontFamily:fonts.serif,
-    color:colors.text,
-  },
-  ledgerCount:{
-    marginBottom:10,
-    paddingBottom:8,
-    borderBottomWidth:1,
-    borderColor:colors.border,
-  },
-  ledgerCard:{
-    flexDirection:"column",
-    alignItems:"stretch",
-  },
-  ledgerCardOther:{
-    borderLeftColor:colors.border,
-  },
-  hash:{
-    fontFamily:fonts.mono,
-    fontSize:12,
-    color:colors.text,
-    marginTop:4,
-  },
-  time:{
-    fontSize:14,
-    fontWeight:'600',
-    color:colors.text,
-    marginTop:6,
-  },
-  summary:{
-    fontSize:15,
-    fontWeight:'600',
-    color:colors.accent,
-    marginTop:14,
-    marginBottom:22,
-  },
-  match:{
-    fontFamily:fonts.mono,
-    fontSize:11,
-    letterSpacing:1,
-    color:colors.accent,
-    marginTop:8,
   },
   // the two ledger actions, always visible above the conversation
   recordBar:{

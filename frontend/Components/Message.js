@@ -3,13 +3,11 @@ import { colors, fonts } from '../lib/styles';
 
 // mine: the message was sent by this account (by key, since two accounts can share a name)
 function Message({message, mine}) {
-    const isSender = mine;
-
     return (
-        <View style={[styles.message, isSender ? styles.message_sender : styles.message_receiver]}>
-            {!isSender && <Text style={styles.name}>{message.name}</Text>}
-            <View style={[styles.bubble, isSender ? styles.bubble_sender : styles.bubble_receiver]}>
-                <Text style={isSender ? styles.text_sender : styles.text_receiver}>{message.message}</Text>
+        <View style={[styles.message, mine ? styles.message_sender : styles.message_receiver]}>
+            {!mine && <Text style={styles.name}>{message.name}</Text>}
+            <View style={[styles.bubble, mine ? styles.bubble_sender : styles.bubble_receiver]}>
+                <Text style={mine ? styles.text_sender : styles.text_receiver}>{message.message}</Text>
             </View>
             <Text style={styles.addtext}>{message.createdAt}</Text>
         </View>
