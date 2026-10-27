@@ -16,7 +16,7 @@ Demo: https://www.youtube.com/watch?v=gxX6pE9dn04
 ```
 
 - 메시지는 GunDB로 기기 간에 동기화되고, 보낸 사람의 키로 서명됩니다.
-- **Record Hash**는 대화 내용의 SHA-256 해시를 원장에 기록하고, **Check Hash**는 지금 대화의 해시와 원장의 해시를 비교합니다.
+- **Record Hash**는 대화 내용의 SHA-256 해시를 원장에 기록하고(새 메시지 10개마다, 방을 나갈 때는 자동), **Check Hash**는 원장의 기록마다 지금 대화와 일치하는지 확인합니다. 메시지가 추가된 것과 예전 메시지가 바뀐 것을 구분합니다.
 
 설계 이유와 한계는 [docs/architecture.md](docs/architecture.md)에 있습니다.
 
