@@ -1,4 +1,3 @@
-import CryptoBridge from '../lib/cryptoBridge';
 import { StyleSheet, Text, View, TextInput,KeyboardAvoidingView, Platform } from 'react-native';
 import { useState, useEffect } from 'react';
 import DesignButton from '../Components/DesignButton'
@@ -25,7 +24,7 @@ function Main({navigation}) {
   // GUN refuses passwords shorter than 8 characters
   const formReady = (userForm.alias).length > 0 && (userForm.password).length > 7;
 
-  // SEA does all its crypto through the hidden <CryptoBridge /> below. If that WebView
+  // SEA does all its crypto through the hidden <CryptoBridge /> in App.js. If that WebView
   // never answers, sign up and login wait forever, so check it once at start.
   useEffect(() => {
     const started = Date.now();
@@ -138,7 +137,6 @@ function Main({navigation}) {
     <KeyboardAvoidingView 
     style = {{ flex: 1 }}
     behavior={Platform.OS === "ios" ? "padding" : null}>
-    <CryptoBridge />
     <View style={common.home}>
       <View style={styles.row}>
     <Logo size={84} />
