@@ -27,6 +27,28 @@ setInterval(() => {
   mesh.hi(dial = { id: GUN_PEER, url: GUN_PEER });
 }, 2000);
 
+// GUN does not resend what was written while disconnected, so the relay and the other users never get it (#58).
+// On reconnecting, every field written since the drop is sent again with its original state and signature:
+// a new put would get a new state, and message states are part of the room hash.
+// shortcut: resends from the in-memory graph only, so a write made offline and then reloaded before reconnecting stays local
+const RESEND_MARGIN = 10000; // writes just before the drop may have gone into a socket that was already dead
+let droppedAt = 0;
+gun._.on('bye', function(peer) { this.to.next(peer); droppedAt = droppedAt || Date.now(); });
+gun._.on('hi', function(peer) {
+  this.to.next(peer);
+  if(!droppedAt) { return; }
+  const since = droppedAt - RESEND_MARGIN, put = {};
+  droppedAt = 0;
+  Object.entries(gun._.graph).forEach(([soul, node]) => {
+    const states = (node._ || {})['>'] || {};
+    const keys = Object.keys(states).filter((key) => states[key] >= since);
+    if(!keys.length) { return; }
+    put[soul] = { _: { '#': soul, '>': {} } };
+    keys.forEach((key) => { put[soul][key] = node[key]; put[soul]._['>'][key] = states[key]; });
+  });
+  if(Object.keys(put).length) { gun._.opt.mesh.say({ put }, peer); }
+});
+
 // GUN cannot list its root keys, so every room is also registered here:
 // rooms.get(name) = { name, host, createdAt }: only read, for rooms made before room info moved to the host's space
 // entered.get(alias).get(name) = true for every room that user has entered

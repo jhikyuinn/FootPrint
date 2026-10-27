@@ -40,7 +40,7 @@ async function send(page, text) {
   await page.getByPlaceholder('My message').press('Enter');
 }
 
-// B's socket to the relay goes through this route: cut() closes it and refuses new connections for ms
+// B's socket to the relay goes through this route: cut() closes it, refuses new connections for ms and runs during() meanwhile
 async function routeRelay(page) {
   const net = { blocked: false, live: [] };
   await page.routeWebSocket(/\/gun$/, (ws) => {
@@ -48,9 +48,11 @@ async function routeRelay(page) {
     ws.connectToServer();
     net.live.push(ws);
   });
-  return async (ms) => {
+  return async (ms, during) => {
     net.blocked = true;
     net.live.splice(0).forEach((ws) => ws.close());
+    await sleep(500);
+    await during();
     await sleep(ms);
     net.blocked = false;
   };
@@ -73,12 +75,13 @@ try {
   check('B sees A before the drop', await sees(b, 'before the drop'));
   // 1s: GUN's own retry gets cancelled; 8s: longer than its 2s retry
   for(const ms of [1000, 8000]) {
-    await cut(ms);
+    await cut(ms, () => send(b, `B during ${ms}ms`));
     await sleep(4000);
     await send(a, `A after ${ms}ms`);
     await send(b, `B after ${ms}ms`);
     check(`after a ${ms}ms drop, B gets A's message`, await sees(b, `A after ${ms}ms`));
     check(`after a ${ms}ms drop, A gets B's message`, await sees(a, `B after ${ms}ms`));
+    check(`after a ${ms}ms drop, A gets what B sent while cut off`, await sees(a, `B during ${ms}ms`));
   }
 } catch(err) {
   check('finished without error: ' + err.message.split('\n')[0], false);
