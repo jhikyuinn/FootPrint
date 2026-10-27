@@ -8,9 +8,9 @@ import { TouchableOpacity } from 'react-native';
 
 import Message from '../Components/Message';
 import DesignButton from '../Components/DesignButton';
-import gun, { GUN, SEA, entered, lastRead, WAIT, readOnce } from '../lib/gun';
+import gun, { GUN, SEA, entered, lastRead, readOnce } from '../lib/gun';
 import { insertByTime, hashMessages, showTime } from '../lib/messages';
-import { readRoom, roomHistory, recordedPubs, unlockRoom, saveRoomKey, loadRoomKey, aliasAccounts, findUserEpub, sealKeyFor } from '../lib/secretRoom';
+import { readRoom, queryRoom, roomHistory, recordedPubs, unlockRoom, saveRoomKey, loadRoomKey, aliasAccounts, findUserEpub, sealKeyFor } from '../lib/secretRoom';
 import common, { colors, fonts } from '../lib/styles';
 
 const initialState = {
@@ -60,13 +60,18 @@ function Chat({route,navigation,alias,pair}){
     useEffect(() => {
       prepare();
       return () => {
-        // everything that arrived while the room was open has been seen
-        lastRead().get(room).put(GUN.state());
         visit.current++;
         subscriptions.current.forEach((subscription) => subscription.off());
         subscriptions.current = [];
       };
     }, [room]);
+
+    // everything that arrived while the room was open has been seen; a room left at its password screen
+    // (or sent back before opening) was not, so its unread count stays
+    useEffect(() => {
+      if(!opened) { return; }
+      return () => lastRead().get(room).put(GUN.state());
+    }, [opened, room]);
 
     // keeps a listener so leaving the room turns it off
     // shortcut: GUN's off() does not detach map().once, so a left room's callback still runs once per new message and returns at the visit check; switch to on() with per-event off if that ever costs
@@ -96,9 +101,9 @@ function Chat({route,navigation,alias,pair}){
   function start() {
     setOpened(true);
     lastRead().get(room).put(GUN.state());
-    onInitHash();
     initRoom();
     getMessage();
+    recordEntry();
   }
 
   async function unlock() {
@@ -171,62 +176,22 @@ function Chat({route,navigation,alias,pair}){
   // where the create record (HostPub) points; otherwise the room could not be opened again.
   const saveFreeRoomInfo = () => gun.user().get('rooms').get(room).put({ name: room, host: alias, createdAt: Date.now(), secret: false });
 
-  const onInitHash = async ()=>{
-    // the room has just been opened: members, then their messages arrive and are decrypted one by one,
-    // so hash once no message has been added for WAIT ms
-    // shortcut: gives up waiting after 10 * WAIT in a room that never goes quiet; count pending reads if that hashes too early
-    const current = visit.current;
-    let count = -1;
-    for(let i = 0; i < 10 && count !== Object.keys(stored.current).length; i++) {
-      count = Object.keys(stored.current).length;
-      await new Promise((resolve) => setTimeout(resolve, WAIT));
-      if(current !== visit.current) { return; }
+  // Records the room's creation, or this user's first entry (the ledger keeps them a member), without a hash:
+  // right after opening, messages are still syncing, and a hash of only part of them would become the
+  // room's latest ledger hash. Hashes are recorded with Record Hash, once the chat has loaded.
+  const recordEntry = async () => {
+    try {
+      const latest = await queryRoom(room);
+      const record = { "RoomNumber": room, "PostID": alias, "PostPub": pair.pub, "Hash": "", "DateTime": Date().toLocaleString() };
+      if(latest === "None") {
+        saveFreeRoomInfo();
+        await axios.post(`${API_URL}/api/recordhash`, { ...record, "Function": "create", "HostID": alias, "HostPub": pair.pub });
+      } else if(!(await ledgerPubs.current).includes(pair.pub)) {
+        await axios.post(`${API_URL}/api/recordhash`, { ...record, "Function": "enter", "HostID": latest.HostID });
+      }
+    } catch(err) {
+      alert("Room record: " + err.message);
     }
-    const hash = roomHash();
-      //개설되어있는 방인지 확인
-    axios.get(`${API_URL}/api/query/${encodeURIComponent(room)}`).then(async (res) => {
-      console.log(res.data)
-      console.log(hash)
-      //처음 개설되는 방 저장(방 이름, 방 개설, 호스트 이름, 입장한 이름, 당시 해시값, 저장 시간)
-        if(res.data=="None"){
-          saveFreeRoomInfo();
-          return axios.post(`${API_URL}/api/recordhash`, {
-            "RoomNumber":room,
-            "Function":"create",
-            "HostID": alias,
-            "HostPub": pair.pub,
-            "PostID": alias,
-            "PostPub": pair.pub,
-            "Hash":hash,
-            "DateTime":Date().toLocaleString()
-          }).then((res) => {
-            alert("Room create hash: \n"+res.data.Hash);
-          })
-        }
-        //이미 개설되어있는 방 입장하면서 저장(방 이름, 방 입장, 호스트 이름, 입장한 이름, 당시 해시값, 저장 시간)
-        else{
-          // a member's first entry is always recorded, even with the hash unchanged: the ledger keeps them a member
-          const recorded = (await ledgerPubs.current).includes(pair.pub);
-          if(res.data.Hash!==hash || !recorded){
-          return axios.post(`${API_URL}/api/recordhash`, {
-            "RoomNumber":room,
-            "Function":"enter",
-            "HostID": res.data.HostID,
-            "PostID": alias,
-            "PostPub": pair.pub,
-            "Hash":hash,
-            "DateTime":Date().toLocaleString()
-          }).then((res) => {
-            alert("Room enter hash: \n"+res.data.Hash);
-          })
-        }
-        else{
-          alert("Same Hash is already recorded");
-        }
-        }
-      }).catch((err) => {
-        alert("Room hash: "+err.message)
-      });
   }
 
   async function saveMessage() {
@@ -261,7 +226,7 @@ function Chat({route,navigation,alias,pair}){
       //그 전의 메세지들의 해쉬값(블록체인에 저장되어있는 해쉬값)
       //그전의 메세지와 현대 메세지가 동일할경우, 그전의 메세지의 값이 존재하지 않는 경우 트랜잭션 발생
       axios.get(`${API_URL}/api/query/${encodeURIComponent(room)}`).then((res) => {
-        // the ledger has no record of this room yet (its create failed): create it now, as onInitHash does
+        // the ledger has no record of this room yet (its create failed): create it now, as recordEntry does
         const created = res.data=="None";
         if(!created && res.data.Hash==hash){
           alert("Same Hash is already recorded");
