@@ -40,10 +40,11 @@ function Ready({alias,pair,navigation}){
         setRoomenterInfo((current) => ({...current, [name]: {name: name, host: (current[name] || {}).host}}))
         // only message times are read here; nothing is decrypted until the room is opened
         subscriptions.push(lastRead().get(name).on((at) => setReadAt((current) => ({...current, [name]: at || 0}))))
-        // messages are in each member's own space; members come from GUN and the ledger (see Chat getMessage)
+        // messages are in each member's own space; members come from GUN and the ledger (see Chat getMessage).
+        // This user's own messages are never unread, even when the app quit without leaving the room (#63)
         const members = {}
         const watchMember = (pub) => {
-          if(members[pub] || SEA.opt.pub('~' + pub) !== pub) { return }
+          if(members[pub] || pub === pair.pub || SEA.opt.pub('~' + pub) !== pub) { return }
           members[pub] = true
           subscriptions.push(gun.get('~' + pub).get('msgs').get(name).map().on((msg, key) => {
             if(!msg || msg.message === undefined) { return }

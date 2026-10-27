@@ -1,4 +1,5 @@
-// Reconnect after a dropped relay connection (#58), in two browsers against the running app.
+// Reconnect after a dropped relay connection (#58, #64) and unread counts after a force quit (#63),
+// in two browsers against the running app.
 // Needs Fabric, the API server, the GUN relay and `npx expo start --web` running (see README), and Chrome installed.
 // Run from frontend/: npm run e2e
 import { chromium } from 'playwright';
@@ -8,7 +9,7 @@ const require = createRequire(import.meta.url);
 const glyphs = require('@expo/vector-icons/build/vendor/react-native-vector-icons/glyphmaps/Ionicons.json');
 const APP = process.env.E2E_APP_URL || 'http://localhost:8081';
 const stamp = Date.now().toString(36).slice(-5);
-const A = 'ea' + stamp, B = 'eb' + stamp, PW = 'password123', ROOM = 'e2e_' + stamp;
+const A = 'ea' + stamp, B = 'eb' + stamp, PW = 'password123', ROOM = 'e2e_' + stamp, SOLO = 'solo_' + stamp;
 
 let failed = 0;
 const check = (name, ok) => { if(!ok) { failed++; } console.log((ok ? 'PASS ' : 'FAIL ') + name); };
@@ -24,12 +25,18 @@ async function signUpAndLogin(page, alias) {
   const signedUp = page.waitForEvent('dialog', { timeout: 30000 });
   await page.getByText('SignUp', { exact: true }).click();
   await signedUp;
+  await login(page, alias);
+}
+
+async function login(page, alias) {
+  await page.getByPlaceholder('ID').fill(alias);
+  await page.getByPlaceholder('Password (8+ characters)').fill(PW);
   await page.getByText('Login', { exact: true }).click();
   await page.getByText('Chat Search').waitFor({ timeout: 60000 });
 }
 
-async function enter(page, create) {
-  await page.getByPlaceholder('Room Number').fill(ROOM);
+async function enter(page, create, room = ROOM) {
+  await page.getByPlaceholder('Room Number').fill(room);
   await icon(page, 'search-outline').click();
   if(create) { await page.getByText('Create room', { exact: true }).click(); }
   await page.getByText('LEDGER', { exact: true }).waitFor({ timeout: 30000 });
@@ -68,6 +75,18 @@ try {
   const a = await page(), b = await page();
   const cut = await routeRelay(b);
   await signUpAndLogin(a, A);
+  // #63: A's own messages are not unread after a quit that skips leaving the room (a reload does not unmount it)
+  await enter(a, true, SOLO);
+  await send(a, 'solo one');
+  await send(a, 'solo two');
+  await sees(a, 'solo two');
+  await sleep(2000);
+  await a.reload();
+  await a.getByText('Foot Print').waitFor({ timeout: 120000 });
+  await login(a, A);
+  await a.getByText(SOLO, { exact: true }).waitFor({ timeout: 20000 });
+  await sleep(4000);
+  check('after a force quit, own messages are not counted as unread', await a.getByLabel(/new messages/).count() === 0);
   await enter(a, true);
   await send(a, 'before the drop');
   await signUpAndLogin(b, B);
@@ -83,6 +102,15 @@ try {
     check(`after a ${ms}ms drop, A gets B's message`, await sees(a, `B after ${ms}ms`));
     check(`after a ${ms}ms drop, A gets what B sent while cut off`, await sees(a, `B during ${ms}ms`));
   }
+  // #64: B sends while cut off and reloads before the connection comes back
+  await cut(3000, async () => {
+    await send(b, 'B before reload');
+    await sees(b, 'B before reload');
+    await sleep(1500);
+    await b.reload();
+    await b.getByText('Foot Print').waitFor({ timeout: 120000 });
+  });
+  check('a message sent while cut off and reloaded before reconnecting reaches A', await sees(a, 'B before reload'));
 } catch(err) {
   check('finished without error: ' + err.message.split('\n')[0], false);
 }
