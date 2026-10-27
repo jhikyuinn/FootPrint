@@ -28,25 +28,54 @@ setInterval(() => {
 }, 2000);
 
 // GUN does not resend what was written while disconnected, so the relay and the other users never get it (#58).
-// On reconnecting, every field written since the drop is sent again with its original state and signature:
-// a new put would get a new state, and message states are part of the room hash.
-// shortcut: resends from the in-memory graph only, so a write made offline and then reloaded before reconnecting stays local
+// Every field written while disconnected is logged with its original state and signature, and kept in storage
+// so a reload or restart before reconnecting does not lose it (#64). On reconnecting it is sent again, with the
+// fields written just before the drop. A new put would get a new state, and message states are part of the room hash.
 const RESEND_MARGIN = 10000; // writes just before the drop may have gone into a socket that was already dead
-let droppedAt = 0;
+const UNSENT = 'footprint/unsent';
+// when the connection dropped; the app starts disconnected until the relay answers
+let droppedAt = Date.now();
+// unsent fields, as a GUN put: { soul: { _: { '#': soul, '>': { key: state } }, key: value } }
+let unsent = {};
+const addField = (put, soul, key, value, state) => {
+  const node = put[soul] = put[soul] || { _: { '#': soul, '>': {} } };
+  if(node._['>'][key] > state) { return; }
+  node[key] = value;
+  node._['>'][key] = state;
+};
+const addPut = (put, from) => Object.entries(from).forEach(([soul, node]) =>
+  Object.entries(node._['>']).forEach(([key, state]) => addField(put, soul, key, node[key], state)));
+const loaded = AsyncStorage.getItem(UNSENT).then((saved) => { if(saved) { addPut(unsent, JSON.parse(saved)); } }).catch(() => {});
+
 gun._.on('bye', function(peer) { this.to.next(peer); droppedAt = droppedAt || Date.now(); });
+// every field that reaches the graph, written here or loaded; only recent ones while disconnected are logged
+gun._.on('put', function(msg) {
+  this.to.next(msg);
+  const put = msg.put;
+  if(!droppedAt || !put || !(put['>'] >= droppedAt - RESEND_MARGIN)) { return; }
+  addField(unsent, put['#'], put['.'], put[':'], put['>']);
+  AsyncStorage.setItem(UNSENT, JSON.stringify(unsent)).catch(() => {});
+});
 gun._.on('hi', function(peer) {
   this.to.next(peer);
   if(!droppedAt) { return; }
-  const since = droppedAt - RESEND_MARGIN, put = {};
+  const since = droppedAt - RESEND_MARGIN;
   droppedAt = 0;
-  Object.entries(gun._.graph).forEach(([soul, node]) => {
-    const states = (node._ || {})['>'] || {};
-    const keys = Object.keys(states).filter((key) => states[key] >= since);
-    if(!keys.length) { return; }
-    put[soul] = { _: { '#': soul, '>': {} } };
-    keys.forEach((key) => { put[soul][key] = node[key]; put[soul]._['>'][key] = states[key]; });
+  loaded.then(() => {
+    const put = {};
+    addPut(put, unsent);
+    Object.entries(gun._.graph).forEach(([soul, node]) => {
+      const states = (node._ || {})['>'] || {};
+      Object.keys(states).filter((key) => states[key] >= since).forEach((key) => addField(put, soul, key, node[key], states[key]));
+    });
+    if(Object.keys(put).length) { gun._.opt.mesh.say({ put }, peer); }
+    // the log is kept a while: if the connection drops again at once, the next reconnect sends it again
+    setTimeout(() => {
+      if(droppedAt) { return; }
+      unsent = {};
+      AsyncStorage.removeItem(UNSENT).catch(() => {});
+    }, RESEND_MARGIN);
   });
-  if(Object.keys(put).length) { gun._.opt.mesh.say({ put }, peer); }
 });
 
 // GUN cannot list its root keys, so every room is also registered here:
