@@ -74,8 +74,7 @@ function Chat({route,navigation,alias,pair}){
       return () => lastRead().get(room).put(GUN.state());
     }, [opened, room]);
 
-    // keeps a listener so leaving the room turns it off
-    // shortcut: GUN's off() does not detach map().once, so a left room's callback still runs once per new message and returns at the visit check; switch to on() with per-event off if that ever costs
+    // keeps a listener so leaving the room turns it off. Lists use map().on, not once: once stops firing for items added later (#56)
     const listen = (chain) => { subscriptions.current.push(chain); return chain; };
 
   // An encrypted room starts once its key is known: from this user's saved keys, or from the password
@@ -149,7 +148,7 @@ function Chat({route,navigation,alias,pair}){
       // GUN answers one member at a time, after this returns: add each one through state so the list redraws
       setUserList((list) => [...list, { pub: pub, name: name }]);
       const secret = roomKey.current || user.epub;
-      listen(gun.get('~' + pub).get('msgs').get(room).map()).once(async (msg, key) => {
+      listen(gun.get('~' + pub).get('msgs').get(room).map()).on(async (msg, key) => {
         if(current !== visit.current || !msg || msg.message === undefined) { return; }
         const at = GUN.state.is(msg, 'message');
         const [text, time] = await Promise.all([SEA.decrypt(msg.message, secret), SEA.decrypt(msg.createdAt, secret)]);
@@ -166,7 +165,7 @@ function Chat({route,navigation,alias,pair}){
         });
       });
     };
-    listen(gun.get(room).get('members').map()).once((isMember, pub) => { if(isMember) { addMember(pub); } });
+    listen(gun.get(room).get('members').map()).on((isMember, pub) => { if(isMember) { addMember(pub); } });
     ledgerPubs.current = roomHistory(room).then(recordedPubs).catch(() => []);
     ledgerPubs.current.then((pubs) => pubs.forEach(addMember));
   }

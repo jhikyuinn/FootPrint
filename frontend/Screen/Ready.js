@@ -45,13 +45,13 @@ function Ready({alias,pair,navigation}){
         const watchMember = (pub) => {
           if(members[pub] || SEA.opt.pub('~' + pub) !== pub) { return }
           members[pub] = true
-          subscriptions.push(gun.get('~' + pub).get('msgs').get(name).map().once((msg, key) => {
+          subscriptions.push(gun.get('~' + pub).get('msgs').get(name).map().on((msg, key) => {
             if(!msg || msg.message === undefined) { return }
             const at = GUN.state.is(msg, 'message')
             setMessageTimes((current) => ({...current, [name]: {...current[name], [key]: at}}))
           }))
         }
-        subscriptions.push(gun.get(name).get('members').map().once((isMember, pub) => { if(isMember) { watchMember(pub) } }))
+        subscriptions.push(gun.get(name).get('members').map().on((isMember, pub) => { if(isMember) { watchMember(pub) } }))
         roomHistory(name).then((records) => {
           recordedPubs(records).forEach(watchMember)
           const latest = records[records.length - 1]
