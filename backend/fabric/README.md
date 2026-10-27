@@ -7,7 +7,7 @@ The FootPrint-specific parts of the Fabric backend, extracted from
 
 | Path | What it is |
 | --- | --- |
-| `chaincode/P2Pmessage/javascript` | The chaincode (`lib/Record.js`): `initLedger`, `queryRecord`, `queryAllRecords`, `queryHistory`, `recordHash` |
+| `chaincode/P2Pmessage/javascript` | The chaincode (`lib/Record.js`): `initLedger`, `queryRecord`, `queryAllRecords`, `queryHistory`, `recordHash`, and `invite`, `queryInvitations`, `respondInvitation` |
 | `apiserver` | Express REST server the app calls, plus the setup scripts `enrollAdmin` and `registerUser` |
 | `startFabric.sh` / `networkDown.sh` | Start the test network and deploy the chaincode as `P2Pmessage` / stop it |
 
@@ -73,7 +73,10 @@ The wallet created in `apiserver/wallet` holds private keys and is git-ignored.
 
 ## Changes made for the current frontend
 
-- Records store `Function` (`create`, `enter`, `record`, `invitation`) and `PostID`; `recordHash` takes them as its fifth and sixth arguments.
+- Each record is written once, under the composite key `record~<room>~<seq>`. The room key only keeps the host, the record count, the last hash and the number of messages it covers (#16).
+- `recordHash(HostID, RoomNumber, Hash, Function, PostID, HostPub, PostPub, Seq, PrevHash, Count)`: a `Seq` that is already written is rejected, and a hashed record must name the room's last hash as `PrevHash` and cannot cover fewer messages (`Count`) than the last one (#17). The record time is the transaction time, not a time the app sends.
+- The first record fixes the room's host; a later `create` is stored as `enter`.
+- Invitations are stored under their own key (`invite~<to>~<room>`), not as room records.
 - New chaincode functions `queryAllRecords` and `queryHistory` (the old `queryHistory` was a commercial-paper leftover that could not run), with the routes `/api/queryallrecords` and `/api/history/:room`.
 - `GET /api/query/:room` answers `"None"` for an unknown room, and errors return HTTP 500 instead of stopping the server.
 - `initLedger` stores its two sample records under their room names (`Ryu0808`, `COM1206`) instead of `Record0` and `Record1`, so `queryRecord` can find them.
@@ -85,14 +88,15 @@ The wallet created in `apiserver/wallet` holds private keys and is git-ignored.
 
 | Method | Path | Chaincode call | Notes |
 | --- | --- | --- | --- |
-| GET | `/api/query/:room` | `queryRecord(RoomNumber)` | Latest record of the room, `{ HostID, RoomNumber, docType, Function, PostID, DateTime, Hash }`, or the string `"None"` for an unknown room. |
+| GET | `/api/query/:room` | `queryRecord(RoomNumber)` | Latest record of the room, `{ Seq, TxId, HostID, HostPub, RoomNumber, docType, Function, PostID, PostPub, DateTime, Hash, Count, PrevHash, LastHash, LastCount }`, or the string `"None"` for an unknown room. `LastHash` / `LastCount` are the room's last hash and the messages it covers, even when the latest record is an `enter` without a hash. |
 | GET | `/api/queryallrecords` | `queryAllRecords()` | Latest record of every room: `[{ Key, Record }]`. |
-| GET | `/api/history/:room` | `queryHistory(RoomNumber)` | Every record written for the room, oldest first: `[{ TxId, Timestamp, Value: { roomnumber, function, hostid, postid, hash, datetime } }]`. Empty list for an unknown room. |
-| POST | `/api/recordhash` | `recordHash(HostID, RoomNumber, DateTime, Hash, Function, PostID)` | Body: `HostID`, `RoomNumber`, `DateTime`, `Hash`, `Function`, `PostID`. Responds with the request body; 400 without `HostID` or `RoomNumber`. |
+| GET | `/api/history/:room` | `queryHistory(RoomNumber)` | Every record written for the room, oldest first: `[{ TxId, Timestamp, Value: { roomnumber, function, hostid, hostpub, postid, postpub, seq, hash, prevhash, count, datetime } }]`. Empty list for an unknown room. |
+| POST | `/api/recordhash` | `recordHash(HostID, RoomNumber, Hash, Function, PostID, HostPub, PostPub, Seq, PrevHash, Count)` | Body: `HostID`, `RoomNumber`, `Hash`, `Function`, `PostID`, `HostPub`, `PostPub`, and optional `Seq`, `PrevHash`, `Count`. Responds with the request body; 400 without `HostID` or `RoomNumber`, 500 when the chaincode rejects the record. |
 
-The world state keeps one record per room and each `recordhash` call overwrites it; earlier
-records stay available through the history route. An `invitation` is sent with an empty `Hash`,
-so until the next `record` the room's latest record has no hash.
+Records are never overwritten. A hashed record covers the room's first `Count` messages and names the
+hash before it, so the app can check every record against the first `Count` messages of the chat:
+added messages keep older records matching, a changed message breaks every record that covers it.
+An `enter` record has no hash and leaves the room's last hash as it was.
 
 `apiserver` uses the `fabric-network` SDK, which works with Fabric 2.5 but is deprecated and does
 not work with Fabric 3. Moving to `@hyperledger/fabric-gateway` is the next step if the network is upgraded.

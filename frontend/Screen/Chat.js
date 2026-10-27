@@ -8,11 +8,16 @@ import { Header } from 'react-native-elements';
 import Message from '../Components/Message';
 import DesignButton from '../Components/DesignButton';
 import LedgerSheet from '../Components/LedgerSheet';
-import gun, { GUN, SEA, entered, lastRead, readOnce } from '../lib/gun';
-import { insertByTime, hashMessages, showTime } from '../lib/messages';
+import gun, { GUN, SEA, entered, lastRead, readOnce, WAIT } from '../lib/gun';
+import { insertByTime, hashMessages, hashFirst, nextRecord, showTime } from '../lib/messages';
 import { queryRoom, roomHistory, recordedPubs, recordHash } from '../lib/ledger';
 import { readRoom, unlockRoom, saveRoomKey, loadRoomKey, aliasAccounts, findUserEpub, sealKeyFor } from '../lib/secretRoom';
 import common, { colors, fonts } from '../lib/styles';
+
+// Automatic records (#21): after AUTO_EVERY new messages, once no message arrived for AUTO_QUIET
+// (a hash taken while messages still sync would cover only part of them), and when the room is left.
+const AUTO_EVERY = 10;
+const AUTO_QUIET = WAIT * 3;
 
 const initialState = {
   messages: [],
@@ -57,6 +62,8 @@ function Chat({route,navigation,alias,pair}){
     const visit = useRef(0);
     // the public keys the ledger has recorded in the room (a promise, set by getMessage)
     const ledgerPubs = useRef(Promise.resolve([]));
+    // the pending automatic record, restarted by every message that arrives
+    const autoTimer = useRef(null);
 
     useEffect(() => {
       prepare();
@@ -71,7 +78,13 @@ function Chat({route,navigation,alias,pair}){
     // (or sent back before opening) was not, so its unread count stays
     useEffect(() => {
       if(!opened) { return; }
-      return () => lastRead().get(room).put(GUN.state());
+      return () => {
+        lastRead().get(room).put(GUN.state());
+        clearTimeout(autoTimer.current);
+        // shortcut: leaving right after opening may record a chat that is still syncing, if its missing
+        // messages come after the last hash; waiting for AUTO_QUIET first would need the screen to stay
+        autoRecord(Object.values(stored.current), 1);
+      };
     }, [opened, room]);
 
     // keeps a listener so leaving the room turns it off. Lists use map().on, not once: once stops firing for items added later (#56)
@@ -155,6 +168,10 @@ function Chat({route,navigation,alias,pair}){
         if(current !== visit.current || text === undefined) { return; }
         // the sender's key is part of the hash, so the same text from another member hashes differently
         stored.current[key] = { key: key, at: at, name: pub, message: msg.message, createdAt: msg.createdAt };
+        clearTimeout(autoTimer.current);
+        autoTimer.current = setTimeout(() => {
+          if(current === visit.current) { autoRecord(Object.values(stored.current), AUTO_EVERY); }
+        }, AUTO_QUIET);
         dispatch({
           key: key,
           at: at,
@@ -173,10 +190,11 @@ function Chat({route,navigation,alias,pair}){
   const roomHash = () => hashMessages(Object.values(stored.current));
 
   // Writes a record of this room by this user; latest is the room's latest ledger record.
+  // chain is { PrevHash, Count } for a hashed record: the last hash it builds on and how many messages it covers.
   // A room the ledger does not know yet (its create from Ready failed) is recorded here as a free room:
   // its info goes in this user's space, where the create record (HostPub) points, or it could not be opened again.
-  const record = (fn, latest, hash) => {
-    const by = { RoomNumber: room, PostID: alias, PostPub: pair.pub, Hash: hash };
+  const record = (fn, latest, hash, chain = {}) => {
+    const by = { RoomNumber: room, PostID: alias, PostPub: pair.pub, Hash: hash, ...chain };
     if(latest !== "None") { return recordHash({ ...by, Function: fn, HostID: latest.HostID }); }
     gun.user().get('rooms').get(room).put({ name: room, host: alias, createdAt: Date.now(), secret: false });
     return recordHash({ ...by, Function: "create", HostID: alias, HostPub: pair.pub });
@@ -220,13 +238,30 @@ function Chat({route,navigation,alias,pair}){
     }
   }
 
-  // Records the current room hash, unless it is already the latest one on the ledger
-  const onHashMessage = async () => {
-    const hash = roomHash();
+  // Records the chat without a tap when nextRecord says so (min: how many new messages it needs).
+  // A failure is left alone: another member recorded first, or the ledger is down and the next trigger tries again.
+  const autoRecord = async (list, min) => {
     try {
       const latest = await queryRoom(room);
-      if(latest !== "None" && latest.Hash === hash) { alert("Same Hash is already recorded"); return; }
-      await record("record", latest, hash);
+      const next = nextRecord(list, latest, min);
+      if(next) { await record("record", latest, next.Hash, next); }
+    } catch(err) {}
+  };
+
+  // Records the current room hash, unless it is already the latest one on the ledger,
+  // or the chat no longer starts with the messages the last hash covers (then it was changed, and is not recorded)
+  const onHashMessage = async () => {
+    const list = Object.values(stored.current);
+    const hash = hashMessages(list);
+    try {
+      const latest = await queryRoom(room);
+      const last = latest === "None" ? { LastHash: "", LastCount: 0 } : latest;
+      if(last.LastHash === hash) { alert("Same Hash is already recorded"); return; }
+      if(last.LastHash && hashFirst(list, last.LastCount) !== last.LastHash) {
+        alert("Earlier messages differ from the last recorded hash, so the chat was not recorded.");
+        return;
+      }
+      await record("record", latest, hash, { PrevHash: last.LastHash, Count: list.length });
       alert("Hash Recorded: \n" + hash);
     } catch(err) {
       alert("Record Hash: " + err.message);
@@ -239,7 +274,7 @@ function Chat({route,navigation,alias,pair}){
     try {
       const records = await roomHistory(room);
       setIsModalVisible(false);
-      setLedger({ hash, records });
+      setLedger({ hash, records, messages: Object.values(stored.current) });
     } catch(err) {
       alert("Check Hash: " + err.message);
     }
@@ -373,7 +408,7 @@ function Chat({route,navigation,alias,pair}){
               </View>
           </View>
           </KeyboardAvoidingView>
-          {ledger && <LedgerSheet hash={ledger.hash} records={ledger.records} onClose={() => setLedger(null)}/>}
+          {ledger && <LedgerSheet hash={ledger.hash} records={ledger.records} messages={ledger.messages} onClose={() => setLedger(null)}/>}
       </View>
 
     )

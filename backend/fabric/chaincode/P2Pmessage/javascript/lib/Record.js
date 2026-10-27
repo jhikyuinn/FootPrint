@@ -8,123 +8,129 @@
 
 const { Contract } = require('fabric-contract-api');
 
+// A room's records live under their own keys (record, room, seq) that are written once and never replaced.
+// The room key only keeps what later records need: the host, the record count and the last hash
+// with the message count it covers.
+const recordKey = (ctx, room, seq) => ctx.stub.createCompositeKey('record', [room, String(seq).padStart(10, '0')]);
+
+async function readJSON(ctx, key) {
+    const bytes = await ctx.stub.getState(key);
+    return bytes && bytes.length > 0 ? JSON.parse(bytes.toString()) : null;
+}
+
+// The room's latest record, with the last hash and its message count (a latest enter record has no hash)
+async function latestRecord(ctx, room) {
+    const meta = await readJSON(ctx, room);
+    if (!meta) {
+        throw new Error(`${room} does not exist`);
+    }
+    const record = await readJSON(ctx, recordKey(ctx, room, meta.Count - 1));
+    return { ...record, LastHash: meta.LastHash, LastCount: meta.LastCount };
+}
+
 class Record extends Contract {
 
     async initLedger(ctx) {
         console.info('============= START : Initialize Ledger ===========');
-        const Records = [
-            {
-                HostID: 'RYU',
-                RoomNumber: 'Ryu0808',
-                Function: 'create',
-                PostID: 'RYU',
-                DateTime: 'Wed Aug 8 2022 15:07:00 GMT+0900 (Korean Standard Time)',
-                Hash: '4cbd530b13d80eeb31ac35a8a193fe0c882be8cf9383f96140f4f09b8bb273d3',
-            },
-            {
-                HostID: 'kyuinn',
-                RoomNumber: 'COM1206',
-                Function: 'create',
-                PostID: 'kyuinn',
-                DateTime: 'Wed Aug 10 2022 15:43:00 GMT+0900 (Korean Standard Time)',
-                Hash: '4eaa7f8ce23b8af1170a2078934fb3f5f68dbf7823dfbe67e00ef10efa40c988',
-            },
-        ];
-
-        for (let i = 0; i < Records.length; i++) {
-            Records[i].docType = 'Record';
-            await ctx.stub.putState(Records[i].RoomNumber, Buffer.from(JSON.stringify(Records[i])));
-            console.info('Added <--> ', Records[i]);
-        }
+        await this.recordHash(ctx, 'RYU', 'Ryu0808', '4cbd530b13d80eeb31ac35a8a193fe0c882be8cf9383f96140f4f09b8bb273d3', 'create', 'RYU', '', '', '');
+        await this.recordHash(ctx, 'kyuinn', 'COM1206', '4eaa7f8ce23b8af1170a2078934fb3f5f68dbf7823dfbe67e00ef10efa40c988', 'create', 'kyuinn', '', '', '');
         console.info('============= END : Initialize Ledger ===========');
     }
 
+    // The room's latest record
     async queryRecord(ctx, RoomNumber) {
-        const recordAsBytes = await ctx.stub.getState(RoomNumber); // get the latest record of the room from chaincode state
-        if (!recordAsBytes || recordAsBytes.length === 0) {
-            throw new Error(`${RoomNumber} does not exist`);
-        }
-
-        console.log(recordAsBytes.toString());
-        return recordAsBytes.toString();
+        return JSON.stringify(await latestRecord(ctx, RoomNumber));
     }
 
+    // Latest record of every room: [{ Key, Record }]. The range skips composite keys, so it only sees room keys.
     async queryAllRecords(ctx) {
         const allResults = [];
-        for await (const { key, value } of ctx.stub.getStateByRange('', '')) {
-            const strValue = Buffer.from(value).toString('utf8');
-            let record;
-            try {
-                record = JSON.parse(strValue);
-            } catch (err) {
-                console.log(err);
-                record = strValue;
-            }
-            allResults.push({ Key: key, Record: record });
+        for await (const { key } of ctx.stub.getStateByRange('', '')) {
+            allResults.push({ Key: key, Record: await latestRecord(ctx, key) });
         }
-        console.info(allResults);
         return JSON.stringify(allResults);
     }
 
     // Function is one of create, enter, record. PostID is the user the record is about.
     // HostPub and PostPub are the public keys of the host and of PostID (empty from older clients).
+    // Seq is the record number the caller expects to write; empty appends. A taken Seq is rejected,
+    // so two callers recording the same state cannot both succeed.
+    // Hash covers the first Count messages of the room. A record names the last hash it builds on (PrevHash),
+    // so a record made without seeing the latest one is rejected, and Count can only grow.
     // (Invitations used to be written here too; they now have their own key, see invite.)
-    async recordHash(ctx, HostID, RoomNumber, DateTime, Hash, Function, PostID, HostPub, PostPub) {
-        console.info('============= START : Create Record ===========');
+    async recordHash(ctx, HostID, RoomNumber, Hash, Function, PostID, HostPub, PostPub, Seq, PrevHash, Count) {
+        const meta = await readJSON(ctx, RoomNumber);
+        const seq = meta ? meta.Count : 0;
+        if (Seq !== undefined && Seq !== '' && Number(Seq) !== seq) {
+            throw new Error(`Record ${Seq} of ${RoomNumber} is already written (next is ${seq})`);
+        }
+        const key = recordKey(ctx, RoomNumber, seq);
+        if (await readJSON(ctx, key)) {
+            throw new Error(`Record ${seq} of ${RoomNumber} is already written`);
+        }
 
         // The first record of a room fixes its host: later records keep it, whatever the caller sends,
         // so nobody can take over a room by recording it again.
-        const existing = await ctx.stub.getState(RoomNumber);
-        if (existing && existing.length > 0) {
-            const first = JSON.parse(existing.toString());
-            HostID = first.HostID;
-            HostPub = first.HostPub || '';
+        if (meta) {
+            HostID = meta.HostID;
+            HostPub = meta.HostPub;
             if (Function === 'create') {
+                // the room already has its first hash; a late create only makes its caller a member
                 Function = 'enter';
+                Hash = '';
+            }
+        }
+        const lastHash = meta ? meta.LastHash : '';
+        const lastCount = meta ? meta.LastCount : 0;
+        const count = Number(Count) || 0;
+        // every hashed record is checked, whatever its Function, or a caller could skip the check by naming it enter
+        if (Hash) {
+            if ((PrevHash || '') !== lastHash) {
+                throw new Error(`${RoomNumber} has a newer hash than the one this record builds on`);
+            }
+            if (count < lastCount) {
+                throw new Error(`A record of ${RoomNumber} cannot cover fewer messages (${count}) than the last one (${lastCount})`);
             }
         }
 
-        const Record = {
+        // the transaction time, which every peer agrees on, not a time the app sends
+        const ts = ctx.stub.getTxTimestamp();
+        const record = {
+            docType: 'Record',
+            Seq: seq,
+            TxId: ctx.stub.getTxID(),
             HostID,
             HostPub: HostPub || '',
             RoomNumber,
-            docType: 'Record',
             Function: Function || 'record',
             PostID: PostID || HostID,
             PostPub: PostPub || '',
-            DateTime,
-            Hash,
+            DateTime: new Date(Number(ts.seconds.toString()) * 1000 + Math.floor(ts.nanos / 1e6)).toISOString(),
+            Hash: Hash || '',
+            // only a hashed record covers messages; it builds on the last hash
+            Count: Hash ? count : 0,
+            PrevHash: Hash ? lastHash : '',
         };
-
-        await ctx.stub.putState(RoomNumber, Buffer.from(JSON.stringify(Record)));
-        console.info('============= END : Create Record ===========');
+        await ctx.stub.putState(key, Buffer.from(JSON.stringify(record)));
+        await ctx.stub.putState(RoomNumber, Buffer.from(JSON.stringify({
+            docType: 'Room',
+            RoomNumber,
+            HostID,
+            HostPub: record.HostPub,
+            Count: seq + 1,
+            // enter records carry no hash; the last hash stays the last one that was recorded
+            LastHash: record.Hash || lastHash,
+            LastCount: record.Hash ? record.Count : lastCount,
+        })));
     }
 
-    /**
-     * Query every record that was written for a room, oldest first
-     * @param {Context} ctx the transaction context
-     * @param {String} RoomNumber room name
-    */
+    // Every record of a room, oldest first (the composite key range is sorted by seq)
     async queryHistory(ctx, RoomNumber) {
         const results = [];
-        for await (const res of ctx.stub.getHistoryForKey(RoomNumber)) {
-            const strValue = Buffer.from(res.value).toString('utf8');
-            let record;
-            try {
-                record = JSON.parse(strValue);
-            } catch (err) {
-                console.log(err);
-                record = strValue;
-            }
-            results.push({
-                TxId: res.txId,
-                Timestamp: new Date(Number(res.timestamp.seconds.toString()) * 1000).toISOString(),
-                IsDelete: res.isDelete,
-                Value: record,
-            });
+        for await (const { value } of ctx.stub.getStateByPartialCompositeKey('record', [RoomNumber])) {
+            const record = JSON.parse(Buffer.from(value).toString('utf8'));
+            results.push({ TxId: record.TxId, Timestamp: record.DateTime, Value: record });
         }
-        // the history iterator returns the newest write first
-        results.reverse();
         return JSON.stringify(results);
     }
 

@@ -11,5 +11,5 @@ export const roomHistory = async (room) => (await axios.get(`${API_URL}/api/hist
 // Public keys of everyone the ledger has recorded in the room. Its records cannot be removed, so neither can these members.
 export const recordedPubs = (records) => records.flatMap((record) => [record.Value.hostpub, record.Value.postpub]).filter(Boolean);
 
-// Writes a record of a room: { RoomNumber, Function, HostID, HostPub, PostID, PostPub, Hash }
-export const recordHash = (record) => axios.post(`${API_URL}/api/recordhash`, { ...record, DateTime: Date() });
+// Writes a record of a room: { RoomNumber, Function, HostID, HostPub, PostID, PostPub, Hash }. The ledger sets its time.
+export const recordHash = (record) => axios.post(`${API_URL}/api/recordhash`, record);
