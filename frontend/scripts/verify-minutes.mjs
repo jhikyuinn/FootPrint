@@ -6,6 +6,10 @@ import { createRequire } from 'node:module';
 import { verifyMinutes } from '../lib/minutes.js';
 
 const require = createRequire(import.meta.url);
+// GUN prints a welcome line soon after it loads and SEA a line for every failed signature:
+// the console stays quiet until the checks are done, and the report below says it all
+const log = console.log;
+console.log = () => {};
 const SEA = require('gun/sea');
 
 const [file, api = 'http://localhost:1206'] = process.argv.slice(2);
@@ -22,6 +26,7 @@ if (!res.ok) {
 }
 const records = await res.json();
 const result = await verifyMinutes(minutes, records, SEA.verify);
+console.log = log;
 
 const mark = (good) => (good ? 'ok  ' : 'FAIL');
 console.log(`Room ${minutes.room}, exported by ${minutes.exportedBy.alias} at ${minutes.exportedAt}\n`);
@@ -45,5 +50,6 @@ records.forEach((r, i) => {
 });
 const rest = minutes.messages.length - result.covered;
 console.log(`\n${result.ok ? 'VERIFIED' : 'NOT VERIFIED'}: ${minutes.messages.length} messages, ${result.covered} covered by ledger hashes`
-  + (rest > 0 ? `, ${rest} newer ones signed but not on the ledger yet` : ''));
+  // only a verified file can say its newest messages are just not recorded yet; otherwise they may be what broke a record
+  + (result.ok && rest > 0 ? `, ${rest} newer ones signed but not on the ledger yet` : ''));
 process.exit(result.ok ? 0 : 1);
