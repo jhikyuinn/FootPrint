@@ -2,7 +2,7 @@ import {useState,useEffect,useReducer,useRef} from 'react';
 import axios from 'axios';
 import { API_URL } from '../lib/config';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import {Modal, View, Text,TextInput,StyleSheet,ScrollView, KeyboardAvoidingView, ActivityIndicator, Platform, TouchableOpacity} from 'react-native';
+import {Modal, View, Text,TextInput,StyleSheet,ScrollView, KeyboardAvoidingView, ActivityIndicator, Platform, TouchableOpacity, Share} from 'react-native';
 import { Header } from 'react-native-elements';
 
 import Message from '../Components/Message';
@@ -10,6 +10,7 @@ import DesignButton from '../Components/DesignButton';
 import LedgerSheet from '../Components/LedgerSheet';
 import gun, { GUN, SEA, entered, lastRead, readOnce, WAIT } from '../lib/gun';
 import { insertByTime, hashMessages, hashFirst, nextRecord, showTime } from '../lib/messages';
+import { buildMinutes, minuteMessage, minuteSender } from '../lib/minutes';
 import { queryRoom, roomHistory, recordedPubs, recordHash } from '../lib/ledger';
 import { readRoom, unlockRoom, saveRoomKey, loadRoomKey, aliasAccounts, findUserEpub, sealKeyFor } from '../lib/secretRoom';
 import common, { colors, fonts } from '../lib/styles';
@@ -18,6 +19,18 @@ import common, { colors, fonts } from '../lib/styles';
 // (a hash taken while messages still sync would cover only part of them), and when the room is left.
 const AUTO_EVERY = 10;
 const AUTO_QUIET = WAIT * 3;
+
+// The web downloads the file. A phone opens the share sheet with the minutes as text.
+// shortcut: no file module is installed, so on a phone the user saves the shared text as a .json file
+// themselves; expo-file-system and expo-sharing would hand over a real file.
+const saveFile = (name, text) => {
+  if(Platform.OS !== "web") { return Share.share({ title: name, message: text }); }
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+  link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+};
 
 const initialState = {
   messages: [],
@@ -167,7 +180,8 @@ function Chat({route,navigation,alias,pair}){
         const [text, time] = await Promise.all([SEA.decrypt(msg.message, secret), SEA.decrypt(msg.createdAt, secret)]);
         if(current !== visit.current || text === undefined) { return; }
         // the sender's key is part of the hash, so the same text from another member hashes differently
-        stored.current[key] = { key: key, at: at, name: pub, message: msg.message, createdAt: msg.createdAt };
+        // text, time, alias and secret are for the minutes; the hash only reads name, message and createdAt
+        stored.current[key] = { key: key, at: at, name: pub, message: msg.message, createdAt: msg.createdAt, text: text, time: time, alias: name, secret: secret };
         clearTimeout(autoTimer.current);
         autoTimer.current = setTimeout(() => {
           if(current === visit.current) { autoRecord(Object.values(stored.current), AUTO_EVERY); }
@@ -268,6 +282,25 @@ function Chat({route,navigation,alias,pair}){
     }
   }
 
+  // Exports the minutes: every message with its sender's signatures and its own AES keys, and the room's
+  // ledger records, so anyone can check them with scripts/verify-minutes.mjs (lib/minutes)
+  async function onExportMinutes() {
+    try {
+      const records = await roomHistory(room);
+      const messages = Object.values(stored.current).map((m) => minuteMessage({
+        soul: m.key, pub: m.name, alias: m.alias, text: m.text, time: m.time,
+        // the raw node keeps the signed values that the message listener gets unpacked
+        node: gun._.graph[m.key], secret: m.secret, Buffer: SEA.Buffer,
+      }));
+      const senders = Object.fromEntries([...new Set(messages.map((m) => m.sender))].map((pub) => [pub, minuteSender(gun._.graph['~' + pub])]));
+      const minutes = buildMinutes({ room, by: { alias, pub: pair.pub }, messages, senders, records, exportedAt: new Date().toISOString() });
+      setIsModalVisible(false);
+      await saveFile(room + "-minutes.json", JSON.stringify(minutes, null, 2));
+    } catch(err) {
+      alert("Export Minutes: " + err.message);
+    }
+  }
+
   // Opens the Check Hash sheet: the current hash next to every record of the room, not only the latest one
   async function onQueryHash() {
     const hash = roomHash();
@@ -351,6 +384,9 @@ function Chat({route,navigation,alias,pair}){
             </TouchableOpacity>
             <TouchableOpacity style={styles.rowicon} onPress={() => onQueryHash()}>
               <Ionicons name="checkbox-outline" size={24} color={colors.accent} /><Text style={[common.boldText, styles.Textsize]}>Check Hash</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.rowicon} onPress={() => onExportMinutes()}>
+              <Ionicons name="document-text-outline" size={24} color={colors.accent} /><Text style={[common.boldText, styles.Textsize]}>Export Minutes</Text>
             </TouchableOpacity>
             <View style={styles.inviteRow}>
               <TextInput  style={[common.input, styles.input]} type="text" value={invitationuser} placeholder="Invitation" placeholderTextColor={colors.subtext} name="Invitation" onChangeText={invitationuser => setInvitationuser(invitationuser)}/>
