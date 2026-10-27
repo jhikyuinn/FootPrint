@@ -107,6 +107,7 @@ app.get('/api/history/:roomState', async function (req,res){
                 hostpub: entry.Value.HostPub,
                 postid: entry.Value.PostID,
                 postpub: entry.Value.PostPub,
+                seq: entry.Value.Seq,
                 hash: entry.Value.Hash,
                 datetime: entry.Value.DateTime,
             },
@@ -119,13 +120,14 @@ app.get('/api/history/:roomState', async function (req,res){
 
 app.post('/api/recordhash', async function(req, res){
     try{
-        const { HostID, RoomNumber, DateTime, Hash, Function, PostID, HostPub, PostPub } = req.body;
+        // Seq is the record number the app expects to write; leave it out to append. The time is the transaction's.
+        const { HostID, RoomNumber, Hash, Function, PostID, HostPub, PostPub, Seq } = req.body;
         if (!HostID || !RoomNumber) {
             res.status(400).json({ error: 'HostID and RoomNumber are required' });
             return;
         }
         const contract = await getContract();
-        await contract.submitTransaction('recordHash', HostID, RoomNumber, DateTime || '', Hash || '', Function || 'record', PostID || HostID, HostPub || '', PostPub || '');
+        await contract.submitTransaction('recordHash', HostID, RoomNumber, Hash || '', Function || 'record', PostID || HostID, HostPub || '', PostPub || '', Seq === undefined ? '' : String(Seq));
         console.log(`Transaction has been submitted`);
         res.send(req.body);
     }
