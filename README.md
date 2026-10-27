@@ -17,6 +17,7 @@ Demo: https://www.youtube.com/watch?v=gxX6pE9dn04
 
 - 메시지는 GunDB로 기기 간에 동기화되고, 보낸 사람의 키로 서명됩니다.
 - **Record Hash**는 대화 내용의 SHA-256 해시를 원장에 기록하고(새 메시지 10개마다, 방을 나갈 때는 자동), **Check Hash**는 원장의 기록마다 지금 대화와 일치하는지 확인합니다. 메시지가 추가된 것과 예전 메시지가 바뀐 것을 구분합니다.
+- **Export Minutes**는 대화를 회의록 파일로 내보냅니다. 파일을 받은 사람은 앱, 방 비밀번호, 방 키 없이 `npm run verify-minutes`로 확인할 수 있습니다. 확인하는 것은 세 가지입니다. 메시지마다 보낸 계정의 서명이 맞는지, 평문이 암호문과 같은지, 대화가 원장의 해시와 일치하는지입니다.
 
 설계 이유와 한계는 [docs/architecture.md](docs/architecture.md)에 있습니다.
 
@@ -49,6 +50,7 @@ Relay, Fabric과 API 서버, 앱 순서로 실행합니다. 설치, 실제 기�
 
 1. ID와 비밀번호(8자 이상)로 회원가입한 뒤 로그인합니다.
 2. 방 이름을 검색해 들어갑니다. 없는 방이면 자유 방 / 암호화 방을 골라 새로 만듭니다.
-3. 오른쪽 위 메뉴에서 **Record Hash**, **Check Hash**, **Invitation**(다른 사용자 초대)을 사용합니다.
+3. 오른쪽 위 메뉴에서 **Record Hash**, **Check Hash**, **Export Minutes**(회의록 내보내기), **Invitation**(다른 사용자 초대)을 사용합니다.
+4. 내보낸 회의록은 `cd frontend && npm run verify-minutes -- <파일> [API 주소]`로 확인합니다. 원장 기록은 파일에 적힌 값이 아니라 API 서버에서 다시 받아 비교합니다.
 
 <img width="866" height="474" alt="image" src="https://github.com/user-attachments/assets/c98b061e-463b-4ce6-a763-ecd865a3b20d" />
