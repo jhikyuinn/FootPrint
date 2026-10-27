@@ -15,6 +15,18 @@ GUN({ store: asyncStore({ AsyncStorage }) })
 
 const gun = new GUN(GUN_PEER);
 
+// GUN never reconnects after a dropped connection: on close its reconnect() runs twice, and the second call
+// cancels the first one's retry after the peer was already removed from opt.peers (#58).
+// So the relay is dialed again, the same way GUN dials it first, whenever no peer is connected.
+// shortcut: uses GUN internals (opt.peers, opt.mesh.hi); recheck on a GUN upgrade, e2e/reconnect.mjs catches a break
+let dial;
+setInterval(() => {
+  const { peers, mesh } = gun._.opt;
+  // skip while connected, or while the last dial is still connecting
+  if(!mesh || Object.keys(peers).length || (dial && dial.wire && dial.wire.readyState === 0)) { return; }
+  mesh.hi(dial = { id: GUN_PEER, url: GUN_PEER });
+}, 2000);
+
 // GUN cannot list its root keys, so every room is also registered here:
 // rooms.get(name) = { name, host, createdAt }: only read, for rooms made before room info moved to the host's space
 // entered.get(alias).get(name) = true for every room that user has entered

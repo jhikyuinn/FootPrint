@@ -6,7 +6,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "test": "node lib/messages.test.mjs"
+    "test": "node lib/messages.test.mjs",
+    "e2e": "node e2e/reconnect.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
@@ -38,7 +39,8 @@
     "webview-crypto": "^0.1.13"
   },
   "devDependencies": {
-    "@babel/core": "^7.12.9"
+    "@babel/core": "^7.12.9",
+    "playwright": "^1.56.1"
   },
   "private": true
 }
