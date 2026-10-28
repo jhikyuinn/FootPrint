@@ -26,10 +26,25 @@ export async function makeSecretRoom(password) {
   return { key, info: { secret: true, salt, check: await SEA.encrypt(CHECK, key) } };
 }
 
+// Whether `key` opens the room's check, so it is the key of this encrypted room
+async function keyFits(info, key) {
+  return !!(info && info.secret && info.check) && (await SEA.decrypt(info.check, key)) === CHECK;
+}
+
 // The room key, or null when the password is wrong
 export async function unlockRoom(info, password) {
   const key = await SEA.work(password, info.salt);
-  return (await SEA.decrypt(info.check, key)) === CHECK ? key : null;
+  return (await keyFits(info, key)) ? key : null;
+}
+
+// Keeps a room key from an invitation. Anyone can send an invitation (#20), so the key must fit the room,
+// and a key this user already has is never replaced: otherwise their messages could go out under a key
+// only the inviter knows (#30). False when the key does not fit or the room info cannot be read.
+export async function acceptRoomKey(room, key, pair) {
+  if(await loadRoomKey(room, pair)) { return true; }
+  if(!(await keyFits(await readRoom(room).catch(() => null), key))) { return false; }
+  await saveRoomKey(room, key, pair);
+  return true;
 }
 
 export async function saveRoomKey(room, key, pair) {

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Header } from 'react-native-elements';
 import axios from 'axios';
 import { API_URL } from '../lib/config';
-import { saveRoomKey, openSealedKey } from '../lib/secretRoom';
+import { acceptRoomKey, openSealedKey } from '../lib/secretRoom';
 import NotificationList from './notificationlist';
 import common, { colors } from '../lib/styles';
 
@@ -30,7 +30,7 @@ function Notification({alias,pair,navigation}){
       if(accepted && invite.Key) {
         const key = await openSealedKey(invite.Key, invite.FromEpub, pair)
         if(!key) { alert("This invitation's room key could not be opened."); return }
-        await saveRoomKey(invite.RoomNumber, key, pair)
+        if(!(await acceptRoomKey(invite.RoomNumber, key, pair))) { alert("This invitation's room key does not match the room."); return }
       }
       try {
         await axios.post(`${API_URL}/api/invitation/respond`, {
