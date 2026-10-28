@@ -125,7 +125,7 @@ function Ready({alias,pair,navigation}){
           "PostID": alias,
           "PostPub": pair.pub,
           "Hash": hashMessages([]),
-        })
+        }, pair)
       } catch (e) {
         alert("Could not create the room: " + e.message)
         return

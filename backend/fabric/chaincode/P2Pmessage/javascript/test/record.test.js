@@ -27,19 +27,21 @@ function newCtx() {
 }
 
 const contract = new Record();
-const record = (ctx, room, fn, hash, { seq = '', prev = '', count = 0, host = 'alice' } = {}) =>
-    contract.recordHash(ctx, host, room, hash, fn, host, 'pubA', 'pubA', seq, prev, String(count));
+const record = (ctx, room, fn, hash, { seq = '', prev = '', count = 0, host = 'alice', sig = '' } = {}) =>
+    contract.recordHash(ctx, host, room, hash, fn, host, 'pubA', 'pubA', seq, prev, String(count), sig);
 
 test('records get their own keys and the history lists them oldest first', async () => {
     const ctx = newCtx();
     await record(ctx, 'room1', 'create', 'h0');
-    await record(ctx, 'room1', 'record', 'h1', { prev: 'h0', count: 3 });
+    await record(ctx, 'room1', 'record', 'h1', { prev: 'h0', count: 3, sig: 'SEA{signed}' });
     await record(ctx, 'room2', 'create', 'x0');
 
     const history = JSON.parse(await contract.queryHistory(ctx, 'room1'));
     assert.deepStrictEqual(history.map((entry) => [entry.Value.Seq, entry.Value.Hash]), [[0, 'h0'], [1, 'h1']]);
     assert.strictEqual(history[0].Timestamp, '2023-11-14T22:13:20.000Z');
     assert.strictEqual(JSON.parse(await contract.queryRecord(ctx, 'room1')).Hash, 'h1');
+    // the signed request is kept with the record (#20)
+    assert.deepStrictEqual(history.map((entry) => entry.Value.Sig), ['', 'SEA{signed}']);
 
     const meta = JSON.parse(ctx.state.get('room1').toString());
     assert.deepStrictEqual([meta.Count, meta.LastHash, meta.LastCount, meta.HostID], [2, 'h1', 3, 'alice']);

@@ -15,6 +15,7 @@ app.use(
 app.use(bodyParser.json());
 
 const { Gateway, Wallets } = require('fabric-network');
+const { readSigned } = require('./signed');
 const fs = require('fs');
 const path = require('path');
 
@@ -112,6 +113,8 @@ app.get('/api/history/:roomState', async function (req,res){
                 prevhash: entry.Value.PrevHash,
                 count: entry.Value.Count,
                 datetime: entry.Value.DateTime,
+                // SEA.sign of the request by postpub; anyone can check it with SEA.verify(sig, postpub)
+                sig: entry.Value.Sig,
             },
         }));
         res.send(history);
@@ -124,15 +127,26 @@ app.post('/api/recordhash', async function(req, res){
     try{
         // Seq is the record number the app expects to write; leave it out to append. The time is the transaction's.
         // Hash covers the room's first Count messages and builds on PrevHash, the room's last hash.
-        const { HostID, RoomNumber, Hash, Function, PostID, HostPub, PostPub, Seq, PrevHash, Count } = req.body;
+        // the record is signed by the user it is about (PostPub); a host key other than the signer's is refused,
+        // so nobody can create a room in someone else's name. The signature is kept in the record.
+        const data = await readSigned(req.body);
+        if (!data) {
+            res.status(401).json({ error: 'A request signed in the last few minutes is required' });
+            return;
+        }
+        const { HostID, RoomNumber, Hash, Function, PostID, HostPub, PostPub, Seq, PrevHash, Count } = data;
         if (!HostID || !RoomNumber) {
             res.status(400).json({ error: 'HostID and RoomNumber are required' });
             return;
         }
+        if (PostPub !== req.body.pub || (HostPub && HostPub !== req.body.pub)) {
+            res.status(403).json({ error: 'A record can only be signed by the user it is about' });
+            return;
+        }
         const contract = await getContract();
-        await contract.submitTransaction('recordHash', HostID, RoomNumber, Hash || '', Function || 'record', PostID || HostID, HostPub || '', PostPub || '', Seq === undefined ? '' : String(Seq), PrevHash || '', String(Count || 0));
+        await contract.submitTransaction('recordHash', HostID, RoomNumber, Hash || '', Function || 'record', PostID || HostID, HostPub || '', PostPub, Seq === undefined ? '' : String(Seq), PrevHash || '', String(Count || 0), req.body.signed);
         console.log(`Transaction has been submitted`);
-        res.send(req.body);
+        res.send(data);
     }
     catch (error) {
         sendError(res, error);

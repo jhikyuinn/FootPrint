@@ -211,9 +211,9 @@ function Chat({route,navigation,alias,pair}){
   // its info goes in this user's space, where the create record (HostPub) points, or it could not be opened again.
   const record = (fn, latest, hash, chain = {}) => {
     const by = { RoomNumber: room, PostID: alias, PostPub: pair.pub, Hash: hash, ...chain };
-    if(latest !== "None") { return recordHash({ ...by, Function: fn, HostID: latest.HostID }); }
+    if(latest !== "None") { return recordHash({ ...by, Function: fn, HostID: latest.HostID }, pair); }
     gun.user().get('rooms').get(room).put({ name: room, host: alias, createdAt: Date.now(), secret: false });
-    return recordHash({ ...by, Function: "create", HostID: alias, HostPub: pair.pub });
+    return recordHash({ ...by, Function: "create", HostID: alias, HostPub: pair.pub }, pair);
   };
 
   // Records the room's creation, or this user's first entry (the ledger keeps them a member), without a hash:
