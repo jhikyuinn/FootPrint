@@ -1,7 +1,7 @@
 //react-native
 import { StyleSheet, Text, View, TextInput,KeyboardAvoidingView,TouchableOpacity, ScrollView, Platform} from 'react-native';
 import { useState, useEffect } from 'react';
-import { Header } from 'react-native-elements';
+import Header from '../Components/Header';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import HistoryList from './historylist';
 import DesignButton from '../Components/DesignButton';
@@ -148,11 +148,7 @@ function Ready({alias,pair,navigation}){
     style = {{ flex: 1 }}
     behavior={Platform.OS === "ios" ? "padding" : null}>
 
-    <Header
-        backgroundColor={colors.background}
-        containerStyle={common.header}
-        leftComponent={{text:"Chat Search",style:common.headerTitle}}
-        />
+    <Header left={<Text numberOfLines={1} style={common.headerTitle}>Chat Search</Text>}/>
         <View style={[common.screen, styles.screen]} >
           <View style={styles.row}>
           <TextInput  style={[common.input, styles.input]} type="text" placeholder="Room Number" placeholderTextColor={colors.subtext} value={roomState} name="Roomnumber" onChangeText={(text) => { setRoom(text); setNewRoom(null) }}/>

@@ -32,10 +32,6 @@ export default StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header:{
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
   headerTitle:{
     width:300,
     fontSize:26,
