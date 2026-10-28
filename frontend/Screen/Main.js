@@ -2,6 +2,7 @@ import { StyleSheet, Text, View, TextInput,KeyboardAvoidingView, Platform } from
 import { useState, useEffect } from 'react';
 import DesignButton from '../Components/DesignButton'
 import gun from '../lib/gun';
+import { rememberLogin, restoreLogin } from '../lib/session';
 import Logo from '../Components/Logo';
 import common, { colors, fonts } from '../lib/styles';
 
@@ -23,6 +24,17 @@ function Main({navigation}) {
   const [busy, setBusy] = useState(false);
   // GUN refuses passwords shorter than 8 characters
   const formReady = (userForm.alias).length > 0 && (userForm.password).length > 7;
+
+  // A login kept on this device opens the app without the form (#11); the buttons wait, since GUN refuses a second auth meanwhile
+  useEffect(() => {
+    setBusy(true);
+    restoreLogin().then((ok) => {
+      if(ok) { navigation.reset({ index: 0, routes: [{ name: "Menu" }] }); } else { setBusy(false); }
+    }).catch((e) => {
+      console.log('restore login: ' + e.message);
+      setBusy(false);
+    });
+  }, [])
 
   // SEA does all its crypto through the hidden <CryptoBridge /> in App.js. If that WebView
   // never answers, sign up and login wait forever, so check it once at start.
@@ -81,6 +93,8 @@ function Main({navigation}) {
                 alert("Login finished without a key pair");
                 return;
               }
+              // a failed save only means the next start asks for the password again
+              await rememberLogin(alias, pair).catch((e) => console.log('remember login: ' + e.message));
               // the screens read the user from GUN's session (lib/session.js), so nothing secret is passed on.
               // reset, not navigate: this screen (and the password in its form) is dropped, and Back cannot return to it
               navigation.reset({ index: 0, routes: [{ name: "Menu" }] });

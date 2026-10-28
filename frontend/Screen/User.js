@@ -3,11 +3,19 @@ import { StyleSheet, Text, View, KeyboardAvoidingView, Platform } from 'react-na
 import DesignButton from '../Components/DesignButton';
 import { Header } from 'react-native-elements';
 import gun from '../lib/gun';
+import { forgetLogin } from '../lib/session';
 import common, { colors, fonts } from '../lib/styles';
 
 function User({alias,navigation}){
     
     const LogoutBtn = async () => {
+        // the kept login goes first: if it stayed, the next start would log in again
+        try {
+            await forgetLogin();
+        } catch (e) {
+            alert("Could not remove the saved login: " + e.message);
+            return;
+        }
         gun.user().leave();
         // the stack is the tab navigator's parent; reset it so Back cannot reopen the logged-out screens
         navigation.getParent().reset({ index: 0, routes: [{ name: 'Main' }] });
