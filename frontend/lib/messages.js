@@ -13,6 +13,25 @@ export const insertByTime = (list, m) => {
   return [...list.slice(0, i), m, ...list.slice(i)];
 };
 
+// The chat screen's message list. The screen draws only the latest `shown` messages (#45): redrawing thousands
+// on every update is what makes a big room slow. Scrolling to the top asks for PAGE more ({ type: 'more' }),
+// and coming back to the bottom draws only the latest PAGE again ({ type: 'bottom' }).
+// The room hash does not use this list, so it still covers every message.
+// A message comes as { message, keep }: messages stay one per key, in time order, so late-synced old ones land
+// in place. keep: the reader has scrolled up, so a message landing in or below the drawn part widens it
+// instead of pushing its top message out of view.
+export const PAGE = 50;
+export const messageList = (state, action) => {
+  if(action.type === 'more') { return { ...state, shown: state.shown + PAGE }; }
+  if(action.type === 'bottom') { return state.shown === PAGE ? state : { ...state, shown: PAGE }; }
+  const { message, keep } = action;
+  if(state.messages.some((m) => m.key === message.key)) { return state; }
+  const messages = insertByTime(state.messages, message);
+  const top = Math.max(0, state.messages.length - state.shown);
+  return { messages, shown: keep && messages.indexOf(message) >= top ? state.shown + 1 : state.shown };
+};
+messageList.initial = { messages: [], shown: PAGE };
+
 export const hashMessages = (list) =>
   CryptoJS.SHA256(JSON.stringify([...list].sort(byTime).map((m) => [m.name, m.message, m.createdAt]))).toString();
 

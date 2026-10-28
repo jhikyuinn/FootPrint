@@ -11,7 +11,7 @@ import LedgerSheet from '../Components/LedgerSheet';
 import ProfileSheet from '../Components/ProfileSheet';
 import { cleanProfile } from '../lib/profileData';
 import gun, { GUN, SEA, entered, lastRead, readOnce, WAIT, ROOM_NAME } from '../lib/gun';
-import { insertByTime, hashMessages, hashFirst, nextRecord, showTime, leftPubs } from '../lib/messages';
+import { messageList as reducer, PAGE, hashMessages, hashFirst, nextRecord, showTime, leftPubs } from '../lib/messages';
 import { buildMinutes, minuteMessage, minuteSender } from '../lib/minutes';
 import { queryRoom, roomHistory, recordedPubs, recordHash, signed } from '../lib/ledger';
 import { readRoom, unlockRoom, saveRoomKey, loadRoomKey, aliasAccounts, findUser, sealKeyFor } from '../lib/secretRoom';
@@ -34,30 +34,22 @@ const saveFile = (name, text) => {
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 };
 
-const initialState = {
-  messages: [],
-};
-
-// One entry per message key, kept in time order, so late-synced old messages land in place
-const reducer = (state, message) => {
-    if (state.messages.some((m) => m.key === message.key)) { return state; }
-    return {
-      messages: insertByTime(state.messages, message),
-    };
-  };
-
 // alias and pair come from the session (withSession in App.js); the params carry only the room name
 function Chat({route,navigation,alias,pair}){
     const {room}=route.params
 
     const [isModalVisible, setIsModalVisible] = useState(false);
-    const [state, dispatch] = useReducer(reducer, initialState);
+    const [state, dispatch] = useReducer(reducer, reducer.initial);
     const [messageState, setMessage] = useState("");
     // true while a message is being encrypted and stored; a ref, so a second tap in the same moment sees it
     const sending = useRef(false);
     // the message list, and whether the user is at its bottom: new messages scroll into view only then
     const messageList = useRef(null);
     const atBottom = useRef(true);
+    // { height, y } of the list when older messages were asked for, until they are drawn
+    const olderFrom = useRef(null);
+    // the list's last scroll position, to tell the reader scrolling up from the list growing
+    const lastY = useRef(0);
     // members whose account was read, by public key: their name. The member list shows the ones that
     // are in the room's GUN index (live) or that the ledger does not record as left (#41)
     const [memberNames, setMemberNames] = useState({});
@@ -212,14 +204,14 @@ function Chat({route,navigation,alias,pair}){
         autoTimer.current = setTimeout(() => {
           if(current === visit.current) { autoRecord(Object.values(stored.current), AUTO_EVERY); }
         }, AUTO_QUIET);
-        dispatch({
+        dispatch({ keep: !atBottom.current, message: {
           key: key,
           at: at,
           name: name,
           pub: pub,
           message: text,
           createdAt: showTime(time),
-        });
+        }});
       });
     };
     // re-reads who left, at most once per burst of index changes (opening a room replays every entry)
@@ -502,14 +494,35 @@ function Chat({route,navigation,alias,pair}){
               </View>
               <ScrollView
                   ref={messageList}
+                  // web only: the browser's scroll anchoring moved the list while drawn messages changed, which read as
+                  // the reader scrolling up; the list keeps the reader's place itself (olderFrom)
+                  style={{ overflowAnchor: "none" }}
                   overScrollMode="never"
                   contentContainerStyle={styles.messages}
                   onScroll={({nativeEvent: {contentOffset, layoutMeasurement, contentSize}}) => {
-                    atBottom.current = contentOffset.y + layoutMeasurement.height >= contentSize.height - 40;
+                    // only the reader moving up leaves the bottom: a scroll event also comes when messages make the list
+                    // taller before it scrolls down to them, and that must not count as reading scrolled up (#45)
+                    if(contentOffset.y + layoutMeasurement.height >= contentSize.height - 40) { atBottom.current = true; }
+                    else if(contentOffset.y < lastY.current) { atBottom.current = false; }
+                    lastY.current = contentOffset.y;
+                    // back at the bottom: older pages are not needed on screen any more
+                    if(atBottom.current && state.shown > PAGE) { dispatch({ type: 'bottom' }); }
+                    // at the top: draw PAGE older messages, remembering where the reader was
+                    // shortcut: 50 messages are assumed taller than the screen; on a taller one the top is never scrolled to
+                    if(contentOffset.y < 40 && !olderFrom.current && state.shown < state.messages.length) {
+                      olderFrom.current = { height: contentSize.height, y: contentOffset.y };
+                      dispatch({ type: 'more' });
+                    }
                   }}
                   scrollEventThrottle={100}
-                  onContentSizeChange={() => { if(atBottom.current) { messageList.current.scrollToEnd({animated: true}); } }}>
-                  {state.messages.map((message) => (
+                  onContentSizeChange={(width, height) => {
+                    // older messages went in above: move down by their height so the same message stays in view
+                    if(olderFrom.current) {
+                      messageList.current.scrollTo({ y: height - olderFrom.current.height + olderFrom.current.y, animated: false });
+                      olderFrom.current = null;
+                    } else if(atBottom.current) { messageList.current.scrollToEnd({animated: true}); }
+                  }}>
+                  {state.messages.slice(-state.shown).map((message) => (
                       <View key={message.key}>
                           <Message message={message} mine={message.pub === pair.pub} photo={profiles[message.pub]?.photo} onPressSender={() => setShownProfile({ pub: message.pub, name: message.name })}/>
                       </View>
