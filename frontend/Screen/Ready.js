@@ -109,7 +109,8 @@ function Ready({alias,pair,navigation}){
       let info = { name: newRoom, host: alias, createdAt: Date.now(), secret: false }
       let made = null
       if(secret) {
-        if(!roomPassword) { alert("Set a password for the encrypted room."); return }
+        // salt and check are public, so a short password can be found offline (same rule as accounts)
+        if(roomPassword.length < 8) { alert("The room password needs at least 8 characters."); return }
         made = await makeSecretRoom(roomPassword)
         info = { ...info, ...made.info }
       }

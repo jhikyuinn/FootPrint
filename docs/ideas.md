@@ -10,3 +10,19 @@
   - 체인코드는 관리자 Fabric 신원(`ctx.clientIdentity`)으로 온 등록만 받습니다.
   - 검증 스크립트는 명부를 읽어 "기관이 확인한 OOO의 키로 서명됨"까지 보여 줍니다.
 - **먼저 필요한 것**: 지금은 API 서버가 모든 요청을 한 Fabric 계정(appUser)으로 보냅니다. 관리자 신원을 분리하고 API 요청 인증(#20)을 먼저 해야 합니다.
+
+## CI 추가
+
+- GitHub Actions로 `frontend`의 `npm test`와 체인코드의 `npm test`를 PR마다 실행합니다. 지금은 테스트 통과를 로컬에서만 확인할 수 있습니다.
+
+## 체인코드 lockfile 커밋
+
+- `backend/fabric/chaincode/P2Pmessage/javascript`에 `package-lock.json`이 없어서 설치할 때마다 의존성 버전이 달라질 수 있습니다.
+
+## 열린 이슈 진행 순서 (제안)
+
+1. 보안, 작은 것부터: #33 방 비밀번호 길이 → #31 방 이름 검사 → #30 초대 방 키 검증
+2. 보안, API 인증: #20 서명 검증 → #35 초대 API 본인 확인 (#20 방식 재사용)
+3. 기능: #11 로그인 유지, #12 프로필 수정, #41 방 나가기, #45 최근 메시지만 불러오기
+4. 의존성·인프라: #43 react-native-elements 교체, #42 fabric-gateway 이전, #65 GUN 재연결 정리
+5. README의 "향후 계획"으로만 남길 것: #24 파일 전송, #23 푸시 알림, #25 HTTPS와 relay 여러 대
