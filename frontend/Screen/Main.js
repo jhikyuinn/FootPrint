@@ -2,7 +2,7 @@ import { StyleSheet, Text, View, TextInput,KeyboardAvoidingView, Platform } from
 import { useState, useEffect } from 'react';
 import DesignButton from '../Components/DesignButton'
 import gun from '../lib/gun';
-import { rememberLogin, restoreLogin } from '../lib/session';
+import { rememberLogin, restoreLogin, settleOnce } from '../lib/session';
 import Logo from '../Components/Logo';
 import common, { colors, fonts } from '../lib/styles';
 
@@ -106,22 +106,6 @@ function Main({navigation}) {
         })
     })
 
-  // Releases the buttons when GUN answers, or after a minute if it never does.
-  const settleOnce = (resolve, label) => {
-    let done = false;
-    const timeout = setTimeout(() => {
-      if(done) { return }
-      done = true;
-      alert(label + " did not finish.\nReload the app before trying again.");
-      resolve(false);
-    }, 60000);
-    return () => {
-      if(done) { return }
-      done = true;
-      clearTimeout(timeout);
-      resolve(true);
-    };
-  }
   
 
   const signUpBtn = async () => {

@@ -46,3 +46,20 @@ export function withSession(Screen) {
     return me ? <Screen {...props} alias={me.alias} pair={me.pair} /> : null;
   };
 }
+
+// Releases the buttons when GUN answers, or after a minute if it never does.
+export function settleOnce(resolve, label) {
+  let done = false;
+  const timeout = setTimeout(() => {
+    if(done) { return }
+    done = true;
+    alert(label + " did not finish.\nReload the app before trying again.");
+    resolve(false);
+  }, 60000);
+  return () => {
+    if(done) { return }
+    done = true;
+    clearTimeout(timeout);
+    resolve(true);
+  };
+}
