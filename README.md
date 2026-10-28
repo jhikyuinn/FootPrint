@@ -19,7 +19,7 @@ Demo: https://www.youtube.com/watch?v=gxX6pE9dn04
 - **Record Hash**는 대화 내용의 SHA-256 해시를 원장에 기록하고(새 메시지 10개마다, 방을 나갈 때는 자동), **Check Hash**는 원장의 기록마다 지금 대화와 일치하는지 확인합니다. 메시지가 추가된 것과 예전 메시지가 바뀐 것을 구분합니다.
 - **Export Minutes**는 대화를 회의록 파일로 내보냅니다. 파일을 받은 사람은 앱, 방 비밀번호, 방 키 없이 `npm run verify-minutes`로 확인할 수 있습니다. 확인하는 것은 세 가지입니다. 메시지마다 보낸 계정의 서명이 맞는지, 평문이 암호문과 같은지, 대화가 원장의 해시와 일치하는지입니다.
 
-설계 이유와 한계는 [docs/architecture.md](docs/architecture.md)에 있습니다.
+설계 이유와 한계는 [docs/architecture.md](docs/architecture.md)에, 공격자 가정과 공격 실험 결과는 [docs/security.md](docs/security.md)에 있습니다.
 
 ## 사용 기술
 
@@ -59,6 +59,6 @@ Relay, Fabric과 API 서버, 앱 순서로 실행합니다. Fabric은 Docker가 
 
 아직 구현하지 않은 기능입니다.
 
-- 사진과 파일 전송 ([#24](https://github.com/jhikyuinn/FootPrint/issues/24))
+- 사진과 파일 전송 ([#24](https://github.com/jhikyuinn/FootPrint/issues/24)): 메시지는 GUN으로 방의 모든 멤버에게 복제되므로 큰 파일을 그대로 넣을 수 없습니다. 별도 파일 저장소, 암호화 방의 파일 암호화, 원장 해시가 파일 내용까지 덮는 방법을 함께 정해야 해서 뒤로 미뤘습니다.
 - 앱이 꺼져 있을 때 푸시 알림 ([#23](https://github.com/jhikyuinn/FootPrint/issues/23))
 - HTTPS / WSS 적용과 relay 여러 대 운영 ([#25](https://github.com/jhikyuinn/FootPrint/issues/25))

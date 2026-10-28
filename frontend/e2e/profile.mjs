@@ -104,6 +104,17 @@ try {
   check("tapping it shows A's ID and introduction", await sees(text(b, 'Profile')) && await sees(text(b, A).last()) && await sees(text(b, BIO)));
   await b.getByLabel('Close profile').click();
 
+  // A changes the introduction while B stays in the room: B sees it without reopening the room
+  await icon(a, 'chevron-back-outline').click();
+  await openUser(a);
+  await text(a, 'Edit profile').click();
+  await a.getByPlaceholder('About me').fill('Changed while B is in');
+  await text(a, 'Save').click();
+  await text(a, 'Changed while B is in').waitFor({ timeout: 20000 });
+  await b.getByLabel('Open ' + A + "'s profile").first().click();
+  check("B sees A's new introduction without reopening the room", await sees(text(b, 'Changed while B is in')));
+  await b.getByLabel('Close profile').click();
+
   // leaving the chat by reload (web keeps no login)
   await a.reload();
   await text(a, 'Foot Print').waitFor({ timeout: 120000 });

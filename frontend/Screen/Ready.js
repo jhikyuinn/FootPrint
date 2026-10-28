@@ -5,7 +5,7 @@ import Header from '../Components/Header';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import HistoryList from './historylist';
 import DesignButton from '../Components/DesignButton';
-import gun, { GUN, SEA, entered, lastRead, ROOM_NAME } from '../lib/gun';
+import gun, { GUN, SEA, entered, lastRead, moveOldEntered, ROOM_NAME } from '../lib/gun';
 import { queryRoom, roomHistory, recordedPubs, recordHash } from '../lib/ledger';
 import { makeSecretRoom, saveRoomKey } from '../lib/secretRoom';
 import { unreadCount, hashMessages } from '../lib/messages';
@@ -36,7 +36,8 @@ function Ready({alias,pair,navigation}){
     const history=()=>{
       const rooms = { "": [] }
       const drop = (current, name) => { const next = {...current}; delete next[name]; return next }
-      rooms[""].push(entered.get(alias).map().on((isEntered, name) => {
+      moveOldEntered(alias).catch((e) => console.log('move room list: ' + e.message))
+      rooms[""].push(entered().map().on((isEntered, name) => {
         if(!isEntered) {
           if(!rooms[name]) { return }
           rooms[name].forEach((subscription) => subscription.off())

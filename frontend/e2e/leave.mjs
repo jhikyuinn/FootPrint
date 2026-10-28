@@ -57,13 +57,6 @@ try {
     await text(page, 'Leave Room').click();
     await text(page, 'Chat Search').waitFor({ timeout: 30000 });
   };
-  // leaves the chat and opens it again, so the member list is read again
-  const reopen = async (page, room) => {
-    await icon(page, 'chevron-back-outline').click();
-    await enter(page, room);
-    await opened(page);
-    await icon(page, 'list-outline').click();
-  };
 
   const a = await open(A), b = await open(B);
   await enter(a, FREE, false);
@@ -72,9 +65,9 @@ try {
   await opened(b);
   await send(b, 'B was here');
   await text(a, 'B was here').waitFor({ timeout: 30000 });
-  await reopen(a, FREE);
+  // A keeps the member list open from here: leaving and coming back show without reopening the room
+  await icon(a, 'list-outline').click();
   check('A sees B as a member before B leaves', await sees(a.getByLabel('Member ' + B)));
-  await icon(a, 'close-outline').first().click();
 
   await leave(b);
   check("the room is gone from B's room list", await gone(text(b, FREE)));
@@ -82,10 +75,8 @@ try {
   const last = records[records.length - 1].Value;
   check('the ledger records the leave', last.function === 'leave' && last.postid === B);
 
-  await reopen(a, FREE);
-  check("B is not in A's member list after leaving", await gone(a.getByLabel('Member ' + B)));
+  check("B goes from A's open member list at once", await gone(a.getByLabel('Member ' + B)));
   check("B's message is still in the room", await sees(text(a, 'B was here')));
-  await icon(a, 'close-outline').first().click();
 
   await enter(b, FREE);
   await opened(b);
@@ -97,8 +88,7 @@ try {
     }
     return false;
   })());
-  await reopen(a, FREE);
-  check("B is back in A's member list", await sees(a.getByLabel('Member ' + B)));
+  check("B is back in A's open member list", await sees(a.getByLabel('Member ' + B)));
 
   // an encrypted room needs its password again after leaving, since the saved room key is removed
   await icon(b, 'chevron-back-outline').click();
