@@ -39,11 +39,11 @@ Demo: https://www.youtube.com/watch?v=gxX6pE9dn04
 
 ## 실행
 
-Relay, Fabric과 API 서버, 앱 순서로 실행합니다. 설치, 실제 기기 연결, 테스트는 [docs/setup.md](docs/setup.md)를 봅니다.
+Relay, Fabric과 API 서버, 앱 순서로 실행합니다. Fabric은 Docker가 켜져 있어야 하고, Windows에서는 Git Bash가 아니라 WSL2에서 실행합니다. 설치, 실제 기기 연결, 테스트는 [docs/setup.md](docs/setup.md)를 봅니다.
 
     cd backend/gun-relay && npm install && npm start        # :8765
     cd backend/fabric && bash startFabric.sh                 # Linux / WSL2
-    cd backend/fabric/apiserver && npm install && node enrollAdmin && node registerUser && node apiserver   # :1206
+    cd backend/fabric/apiserver && npm install && node apiserver   # :1206
     cd frontend && npm install && npx expo start --go
 
 ## 사용 방법
