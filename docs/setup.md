@@ -22,8 +22,6 @@ fabric-samples 내려받기, 바이너리와 Docker 이미지 설치는 [backend
 
     cd apiserver
     npm install
-    node enrollAdmin
-    node registerUser
     node apiserver
 
 API 서버는 포트 1206에서 실행됩니다. API 서버를 실행하지 않으면 앱은 켜지지만 해시 기록, 해시 확인, 초대, 입장 기록 기능이 동작하지 않습니다.

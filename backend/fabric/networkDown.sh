@@ -13,6 +13,3 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 pushd "${DIR}/fabric-samples/test-network"
 ./network.sh down
 popd
-
-# clean out any old identites in the wallets
-rm -rf "${DIR}"/apiserver/wallet/*

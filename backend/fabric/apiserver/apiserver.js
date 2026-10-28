@@ -14,7 +14,9 @@ app.use(
 
 app.use(bodyParser.json());
 
-const { Gateway, Wallets } = require('fabric-network');
+const grpc = require('@grpc/grpc-js');
+const { connect, signers } = require('@hyperledger/fabric-gateway');
+const crypto = require('crypto');
 const { readSigned } = require('./signed');
 const fs = require('fs');
 const path = require('path');
@@ -22,49 +24,44 @@ const path = require('path');
 const PORT = process.env.PORT || 1206;
 const HOST = process.env.HOST || '0.0.0.0';
 
-let contractPromise;
+// The Fabric Gateway on Org1's peer, as the test network's User1 (made by `network.sh up -ca`):
+// its certificate and key files are the identity, so there is no wallet and no CA enrollment step (#42).
+const ORG1 = path.resolve(__dirname, '..', 'fabric-samples', 'test-network', 'organizations', 'peerOrganizations', 'org1.example.com');
+const USER_MSP = path.join(ORG1, 'users', 'User1@org1.example.com', 'msp');
+const PEER_ENDPOINT = process.env.PEER_ENDPOINT || 'localhost:7051';
 
-// Connect to the gateway once and reuse the contract for every request.
+let contract;
+
+// Connects once and reuses the contract for every request; a failed connect is tried again on the next request
 function getContract() {
-    if (!contractPromise) {
-        contractPromise = connect().catch((error) => {
-            contractPromise = undefined;
-            throw error;
+    if (!contract) {
+        const tlsRoot = fs.readFileSync(path.join(ORG1, 'peers', 'peer0.org1.example.com', 'tls', 'ca.crt'));
+        // the peer's TLS certificate is issued to its host name, not to localhost
+        const client = new grpc.Client(PEER_ENDPOINT, grpc.credentials.createSsl(tlsRoot), { 'grpc.ssl_target_name_override': 'peer0.org1.example.com' });
+        const keyDir = path.join(USER_MSP, 'keystore');
+        const gateway = connect({
+            client,
+            identity: { mspId: 'Org1MSP', credentials: fs.readFileSync(path.join(USER_MSP, 'signcerts', 'cert.pem')) },
+            signer: signers.newPrivateKeySigner(crypto.createPrivateKey(fs.readFileSync(path.join(keyDir, fs.readdirSync(keyDir)[0])))),
         });
+        contract = gateway.getNetwork('mychannel').getContract('P2Pmessage');
     }
-    return contractPromise;
+    return contract;
 }
 
-async function connect() {
-    const ccpPath = path.resolve(__dirname, '..', 'fabric-samples', 'test-network', 'organizations', 'peerOrganizations', 'org1.example.com', 'connection-org1.json');
-    const ccp = JSON.parse(fs.readFileSync(ccpPath, 'utf8'));
+// Transaction results are bytes
+const parse = (bytes) => JSON.parse(Buffer.from(bytes).toString('utf8'));
 
-    // Create a new file system based wallet for managing identities.
-    const walletPath = path.join(process.cwd(), 'wallet');
-    const wallet = await Wallets.newFileSystemWallet(walletPath);
-    console.log(`Wallet path: ${walletPath}`);
-
-    // Check to see if we've already enrolled the user.
-    const identity = await wallet.get('appUser');
-    if (!identity) {
-        throw new Error('An identity for the user "appUser" does not exist in the wallet. Run the registerUser.js application before retrying');
-    }
-    // Create a new gateway for connecting to our peer node.
-    const gateway = new Gateway();
-    await gateway.connect(ccp, { wallet, identity: 'appUser', discovery: { enabled: true, asLocalhost: true } });
-    // Get the network (channel) our contract is deployed to.
-    const network = await gateway.getNetwork('mychannel');
-    // Get the contract from the network.
-    return network.getContract('P2Pmessage');
-}
+// The Gateway puts the chaincode's own message in the error details
+const errorText = (error) => [error.message, ...(error.details || []).map((detail) => detail.message)].join('; ');
 
 function unsigned(res) {
     res.status(401).json({ error: 'A request signed in the last few minutes is required' });
 }
 
 function sendError(res, error) {
-    console.error(`Failed to evaluate transaction: ${error}`);
-    res.status(500).json({ error: error.message });
+    console.error(`Failed transaction: ${errorText(error)}`);
+    res.status(500).json({ error: errorText(error) });
 }
 
 // Latest record of a room, or the string "None" when the room has never been recorded.
@@ -73,9 +70,9 @@ app.get('/api/query/:roomState', async function (req,res){
         const contract = await getContract();
         const result = await contract.evaluateTransaction('queryRecord',req.params.roomState);
         console.log(`Transaction has been evaluated`);
-        res.send(JSON.parse(result));
+        res.send(parse(result));
     } catch (error) {
-        if (String(error.message).includes('does not exist')) {
+        if (errorText(error).includes('does not exist')) {
             res.send("None");
             return;
         }
@@ -89,7 +86,7 @@ app.get('/api/queryallrecords', async function (req,res){
         const contract = await getContract();
         const result = await contract.evaluateTransaction('queryAllRecords');
         console.log(`Transaction has been evaluated`);
-        res.send(JSON.parse(result));
+        res.send(parse(result));
     } catch (error) {
         sendError(res, error);
     }
@@ -102,7 +99,7 @@ app.get('/api/history/:roomState', async function (req,res){
         const result = await contract.evaluateTransaction('queryHistory',req.params.roomState);
         console.log(`Transaction has been evaluated`);
         // the app reads the history values with lower-case field names
-        const history = JSON.parse(result).map((entry) => ({
+        const history = parse(result).map((entry) => ({
             TxId: entry.TxId,
             Timestamp: entry.Timestamp,
             Value: {
@@ -183,7 +180,7 @@ app.get('/api/invitations/:pub', async function (req,res){
         if (!data || data.List !== req.params.pub) { unsigned(res); return; }
         const contract = await getContract();
         const result = await contract.evaluateTransaction('queryInvitations', req.params.pub);
-        res.send(JSON.parse(result));
+        res.send(parse(result));
     } catch (error) {
         sendError(res, error);
     }
