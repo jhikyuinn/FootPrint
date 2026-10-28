@@ -1,7 +1,7 @@
 //react-native
 import { StyleSheet, Text, View, KeyboardAvoidingView, Platform } from 'react-native';
 import DesignButton from '../Components/DesignButton';
-import { Header } from 'react-native-elements';
+import Header from '../Components/Header';
 import gun from '../lib/gun';
 import common, { colors, fonts } from '../lib/styles';
 
@@ -18,11 +18,7 @@ function User({alias,navigation}){
     style = {{ flex: 1 }}
     behavior={Platform.OS === "ios" ? "padding" : null}>
 
-    <Header
-        backgroundColor={colors.background}
-        containerStyle={common.header}
-        leftComponent={{text:"User Info",style:common.headerTitle}}
-    />
+    <Header left={<Text numberOfLines={1} style={common.headerTitle}>User Info</Text>}/>
     <View style={[common.home, styles.home]} >
           <View style={styles.avatar}>
             <Text style={styles.initial}>{(alias || "?").charAt(0).toUpperCase()}</Text>

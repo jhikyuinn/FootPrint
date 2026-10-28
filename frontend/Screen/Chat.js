@@ -3,7 +3,7 @@ import axios from 'axios';
 import { API_URL } from '../lib/config';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import {Modal, View, Text,TextInput,StyleSheet,ScrollView, KeyboardAvoidingView, ActivityIndicator, Platform, TouchableOpacity, Share} from 'react-native';
-import { Header } from 'react-native-elements';
+import Header from '../Components/Header';
 
 import Message from '../Components/Message';
 import DesignButton from '../Components/DesignButton';
@@ -405,10 +405,9 @@ function Chat({route,navigation,alias,pair}){
 
           <Header
           backgroundColor={colors.surface}
-          containerStyle={{borderBottomColor:colors.border}}
-          leftComponent={<TouchableOpacity onPress={Back}><Ionicons name="chevron-back-outline" size={30} color={colors.text} /></TouchableOpacity>}
-          centerComponent={{ text:room,style:{width:220,textAlign:'center',fontSize:20,fontWeight:'bold',fontFamily:fonts.serif,color:colors.text}}}
-          rightComponent={<TouchableOpacity onPress={() => modalopen()}>
+          left={<TouchableOpacity onPress={Back}><Ionicons name="chevron-back-outline" size={30} color={colors.text} /></TouchableOpacity>}
+          center={<Text numberOfLines={1} style={{width:220,textAlign:'center',fontSize:20,fontWeight:'bold',fontFamily:fonts.serif,color:colors.text}}>{room}</Text>}
+          right={<TouchableOpacity onPress={() => modalopen()}>
                             <Ionicons name="list-outline" size={26} color={colors.text} />
                           </TouchableOpacity>}
           />

@@ -1,7 +1,7 @@
 //react-native
 import { Text, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useState, useEffect } from 'react';
-import { Header } from 'react-native-elements';
+import Header from '../Components/Header';
 import axios from 'axios';
 import { API_URL } from '../lib/config';
 import { acceptRoomKey, openSealedKey } from '../lib/secretRoom';
@@ -55,11 +55,7 @@ function Notification({alias,pair,navigation}){
     style = {{ flex: 1 , backgroundColor:colors.background}}
     behavior={Platform.OS === "ios" ? "padding" : null}>
 
-    <Header
-        backgroundColor={colors.background}
-        containerStyle={common.header}
-        leftComponent={{text:"Notification",style:common.headerTitle}}
-        />
+    <Header left={<Text numberOfLines={1} style={common.headerTitle}>Notification</Text>}/>
         <ScrollView contentContainerStyle={{paddingHorizontal:20,paddingTop:8}}>
           {invites.length === 0 ?
             <Text style={{color:colors.subtext, marginTop:8}}>No invitations.</Text> :
