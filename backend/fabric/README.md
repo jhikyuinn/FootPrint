@@ -74,7 +74,7 @@ The wallet created in `apiserver/wallet` holds private keys and is git-ignored.
 ## Changes made for the current frontend
 
 - Each record is written once, under the composite key `record~<room>~<seq>`. The room key only keeps the host, the record count, the last hash and the number of messages it covers (#16).
-- `recordHash(HostID, RoomNumber, Hash, Function, PostID, HostPub, PostPub, Seq, PrevHash, Count)`: a `Seq` that is already written is rejected, and a hashed record must name the room's last hash as `PrevHash` and cannot cover fewer messages (`Count`) than the last one (#17). The record time is the transaction time, not a time the app sends.
+- `recordHash(HostID, RoomNumber, Hash, Function, PostID, HostPub, PostPub, Seq, PrevHash, Count, Sig)`: a `Seq` that is already written is rejected, and a hashed record must name the room's last hash as `PrevHash` and cannot cover fewer messages (`Count`) than the last one (#17). The record time is the transaction time, not a time the app sends. `Sig` is the signed request the API server checked (#20).
 - The first record fixes the room's host; a later `create` is stored as `enter`.
 - Invitations are stored under their own key (`invite~<to>~<room>`), not as room records.
 - New chaincode functions `queryAllRecords` and `queryHistory` (the old `queryHistory` was a commercial-paper leftover that could not run), with the routes `/api/queryallrecords` and `/api/history/:room`.
@@ -90,8 +90,8 @@ The wallet created in `apiserver/wallet` holds private keys and is git-ignored.
 | --- | --- | --- | --- |
 | GET | `/api/query/:room` | `queryRecord(RoomNumber)` | Latest record of the room, `{ Seq, TxId, HostID, HostPub, RoomNumber, docType, Function, PostID, PostPub, DateTime, Hash, Count, PrevHash, LastHash, LastCount }`, or the string `"None"` for an unknown room. `LastHash` / `LastCount` are the room's last hash and the messages it covers, even when the latest record is an `enter` without a hash. |
 | GET | `/api/queryallrecords` | `queryAllRecords()` | Latest record of every room: `[{ Key, Record }]`. |
-| GET | `/api/history/:room` | `queryHistory(RoomNumber)` | Every record written for the room, oldest first: `[{ TxId, Timestamp, Value: { roomnumber, function, hostid, hostpub, postid, postpub, seq, hash, prevhash, count, datetime } }]`. Empty list for an unknown room. |
-| POST | `/api/recordhash` | `recordHash(HostID, RoomNumber, Hash, Function, PostID, HostPub, PostPub, Seq, PrevHash, Count)` | Body: `HostID`, `RoomNumber`, `Hash`, `Function`, `PostID`, `HostPub`, `PostPub`, and optional `Seq`, `PrevHash`, `Count`. Responds with the request body; 400 without `HostID` or `RoomNumber`, 500 when the chaincode rejects the record. |
+| GET | `/api/history/:room` | `queryHistory(RoomNumber)` | Every record written for the room, oldest first: `[{ TxId, Timestamp, Value: { roomnumber, function, hostid, hostpub, postid, postpub, seq, hash, prevhash, count, datetime, sig } }]`. `sig` can be checked with `SEA.verify(sig, postpub)`. Empty list for an unknown room. |
+| POST | `/api/recordhash` | `recordHash(HostID, RoomNumber, Hash, Function, PostID, HostPub, PostPub, Seq, PrevHash, Count, Sig)` | Body: `{ signed, pub }` (#20). `signed` is `SEA.sign` by the user's pair of `{ HostID, RoomNumber, Hash, Function, PostID, HostPub, PostPub, At }` and optional `Seq`, `PrevHash`, `Count`; `At` is the signing time in ms. Responds with the signed record; 401 when the signature does not match `pub` or `At` is more than 5 minutes off, 403 when `PostPub` (or a given `HostPub`) is not `pub`, 400 without `HostID` or `RoomNumber`, 500 when the chaincode rejects the record. |
 
 Records are never overwritten. A hashed record covers the room's first `Count` messages and names the
 hash before it, so the app can check every record against the first `Count` messages of the chat:

@@ -57,8 +57,9 @@ class Record extends Contract {
     // so two callers recording the same state cannot both succeed.
     // Hash covers the first Count messages of the room. A record names the last hash it builds on (PrevHash),
     // so a record made without seeing the latest one is rejected, and Count can only grow.
+    // Sig is the signed request the API server checked (empty from older clients).
     // (Invitations used to be written here too; they now have their own key, see invite.)
-    async recordHash(ctx, HostID, RoomNumber, Hash, Function, PostID, HostPub, PostPub, Seq, PrevHash, Count) {
+    async recordHash(ctx, HostID, RoomNumber, Hash, Function, PostID, HostPub, PostPub, Seq, PrevHash, Count, Sig) {
         const meta = await readJSON(ctx, RoomNumber);
         const seq = meta ? meta.Count : 0;
         if (Seq !== undefined && Seq !== '' && Number(Seq) !== seq) {
@@ -110,6 +111,8 @@ class Record extends Contract {
             // only a hashed record covers messages; it builds on the last hash
             Count: Hash ? count : 0,
             PrevHash: Hash ? lastHash : '',
+            // the request as PostPub signed it (SEA.sign), checked by the API server (#20)
+            Sig: Sig || '',
         };
         await ctx.stub.putState(key, Buffer.from(JSON.stringify(record)));
         await ctx.stub.putState(RoomNumber, Buffer.from(JSON.stringify({
