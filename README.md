@@ -59,6 +59,6 @@ Relay, Fabric과 API 서버, 앱 순서로 실행합니다. Fabric은 Docker가 
 
 아직 구현하지 않은 기능입니다.
 
-- 사진과 파일 전송 ([#24](https://github.com/jhikyuinn/FootPrint/issues/24))
+- 사진과 파일 전송 ([#24](https://github.com/jhikyuinn/FootPrint/issues/24)): 메시지는 GUN으로 방의 모든 멤버에게 복제되므로 큰 파일을 그대로 넣을 수 없습니다. 별도 파일 저장소, 암호화 방의 파일 암호화, 원장 해시가 파일 내용까지 덮는 방법을 함께 정해야 해서 뒤로 미뤘습니다.
 - 앱이 꺼져 있을 때 푸시 알림 ([#23](https://github.com/jhikyuinn/FootPrint/issues/23))
 - HTTPS / WSS 적용과 relay 여러 대 운영 ([#25](https://github.com/jhikyuinn/FootPrint/issues/25))
