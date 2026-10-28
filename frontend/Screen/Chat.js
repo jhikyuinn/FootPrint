@@ -8,6 +8,8 @@ import Header from '../Components/Header';
 import Message from '../Components/Message';
 import DesignButton from '../Components/DesignButton';
 import LedgerSheet from '../Components/LedgerSheet';
+import ProfileSheet from '../Components/ProfileSheet';
+import { cleanProfile } from '../lib/profileData';
 import gun, { GUN, SEA, entered, lastRead, readOnce, WAIT, ROOM_NAME } from '../lib/gun';
 import { insertByTime, hashMessages, hashFirst, nextRecord, showTime } from '../lib/messages';
 import { buildMinutes, minuteMessage, minuteSender } from '../lib/minutes';
@@ -60,6 +62,9 @@ function Chat({route,navigation,alias,pair}){
     const [invitationuser, setInvitationuser] = useState("");
     // { hash, records } while the Check Hash sheet is open: the current hash and the room's ledger history
     const [ledger, setLedger] = useState(null);
+    // members' checked profiles by public key ({ photo, bio }), and the sender ({ pub, name }) whose profile sheet is open
+    const [profiles, setProfiles] = useState({});
+    const [shownProfile, setShownProfile] = useState(null);
     // key of an encrypted room; null in a free room, where messages use the sender's epub as before
     const roomKey = useRef(null);
     // room info while an encrypted room waits for its password
@@ -175,6 +180,10 @@ function Chat({route,navigation,alias,pair}){
       if(current !== visit.current) { return; }
       // GUN answers one member at a time, after this returns: add each one through state so the list redraws
       setUserList((list) => [...list, { pub: pub, name: name }]);
+      // read once per visit, so a changed photo shows the next time the room is opened; messages do not wait for it
+      readOnce(gun.get('~' + pub).get('profile')).then((data) => {
+        if(current === visit.current) { setProfiles((all) => ({ ...all, [pub]: cleanProfile(data) })); }
+      });
       const secret = roomKey.current || user.epub;
       listen(gun.get('~' + pub).get('msgs').get(room).map()).on(async (msg, key) => {
         if(current !== visit.current || !msg || msg.message === undefined) { return; }
@@ -435,7 +444,7 @@ function Chat({route,navigation,alias,pair}){
                   onContentSizeChange={() => { if(atBottom.current) { messageList.current.scrollToEnd({animated: true}); } }}>
                   {state.messages.map((message) => (
                       <View key={message.key}>
-                          <Message message={message} mine={message.pub === pair.pub}/>
+                          <Message message={message} mine={message.pub === pair.pub} photo={profiles[message.pub]?.photo} onPressSender={() => setShownProfile({ pub: message.pub, name: message.name })}/>
                       </View>
                   ))}
               </ScrollView>
@@ -447,6 +456,7 @@ function Chat({route,navigation,alias,pair}){
               </View>
           </View>
           </KeyboardAvoidingView>
+          {shownProfile && <ProfileSheet name={shownProfile.name} {...profiles[shownProfile.pub]} onClose={() => setShownProfile(null)}/>}
           {ledger && <LedgerSheet hash={ledger.hash} records={ledger.records} messages={ledger.messages} onClose={() => setLedger(null)}/>}
       </View>
 

@@ -1,15 +1,26 @@
-import {View, Text, StyleSheet} from 'react-native';
+import {View, Text, StyleSheet, TouchableOpacity} from 'react-native';
+import Avatar from './Avatar';
 import { colors, fonts } from '../lib/styles';
 
 // mine: the message was sent by this account (by key, since two accounts can share a name)
-function Message({message, mine}) {
-    return (
+// photo: the sender's checked profile photo; onPressSender opens their profile
+function Message({message, mine, photo, onPressSender}) {
+    const body = (
         <View style={[styles.message, mine ? styles.message_sender : styles.message_receiver]}>
             {!mine && <Text style={styles.name}>{message.name}</Text>}
             <View style={[styles.bubble, mine ? styles.bubble_sender : styles.bubble_receiver]}>
                 <Text style={mine ? styles.text_sender : styles.text_receiver}>{message.message}</Text>
             </View>
             <Text style={styles.addtext}>{message.createdAt}</Text>
+        </View>
+    );
+    if(mine) { return body; }
+    return (
+        <View style={styles.row}>
+            <TouchableOpacity onPress={onPressSender} accessibilityLabel={"Open " + message.name + "'s profile"} style={styles.avatar}>
+                <Avatar photo={photo} name={message.name} size={34}/>
+            </TouchableOpacity>
+            {body}
         </View>
     )
 }
@@ -18,6 +29,14 @@ export default Message;
 
 
 const styles = StyleSheet.create({
+    row: {
+        flexDirection:"row",
+        alignItems:"flex-start",
+    },
+    avatar: {
+        marginRight:8,
+        marginTop:2,
+    },
     message: {
         maxWidth:"78%",
         marginBottom:12,
