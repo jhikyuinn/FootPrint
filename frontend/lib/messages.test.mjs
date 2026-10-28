@@ -1,6 +1,6 @@
 // Run with: node lib/messages.test.mjs
 import assert from 'node:assert';
-import { byTime, checkRecords, hashFirst, hashMessages, insertByTime, nextRecord, showTime, unreadCount } from './messages.js';
+import { byTime, checkRecords, hashFirst, hashMessages, insertByTime, leftPubs, nextRecord, showTime, unreadCount } from './messages.js';
 
 const a = { key: 'a', at: 1, name: 'n1', message: 'm1', createdAt: 't1' };
 const b = { key: 'b', at: 2, name: 'n2', message: 'm2', createdAt: 't2' };
@@ -43,4 +43,12 @@ assert.deepStrictEqual(nextRecord([a, b, c, d], latest, 2), { Hash: hashMessages
 assert.strictEqual(nextRecord([a, { ...b, message: 'x' }, c, d], latest, 2), null);
 assert.strictEqual(nextRecord([a, b], latest, 0) && nextRecord([a, b], latest, 1), null);
 assert.strictEqual(nextRecord([a, b, c], 'None', 1), null);
+
+// leaving: a key is left while its latest record is a leave; entering again (or recording a hash) undoes it
+const membership = (fn, pub) => ({ Value: { function: fn, postpub: pub, hostpub: 'host' } });
+assert.deepStrictEqual([...leftPubs([membership('create', 'host'), membership('enter', 'p1'), membership('leave', 'p1')])], ['p1']);
+assert.deepStrictEqual([...leftPubs([membership('create', 'host'), membership('leave', 'p1'), membership('enter', 'p1')])], []);
+assert.deepStrictEqual([...leftPubs([membership('create', 'host'), membership('leave', 'host'), membership('record', 'p2')])], ['host']);
+assert.deepStrictEqual([...leftPubs([membership('leave', 'p1'), membership('record', 'p1')])], []);
+assert.deepStrictEqual([...leftPubs([])], []);
 console.log('ok');
