@@ -10,6 +10,7 @@
     "verify-minutes": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verify-minutes.mjs",
     "e2e": "node e2e/reconnect.mjs",
     "e2e:rooms": "node e2e/rooms.mjs",
+    "e2e:attacks": "node e2e/attacks.mjs",
     "e2e:profile": "node e2e/profile.mjs",
     "e2e:leave": "node e2e/leave.mjs"
   },
