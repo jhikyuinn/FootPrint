@@ -54,3 +54,11 @@ Relay, Fabric과 API 서버, 앱 순서로 실행합니다. 설치, 실제 기�
 4. 내보낸 회의록은 `cd frontend && npm run verify-minutes -- <파일> [API 주소]`로 확인합니다. 원장 기록은 파일에 적힌 값이 아니라 API 서버에서 다시 받아 비교합니다.
 
 <img width="866" height="474" alt="image" src="https://github.com/user-attachments/assets/c98b061e-463b-4ce6-a763-ecd865a3b20d" />
+
+## 향후 계획
+
+아직 구현하지 않은 기능입니다.
+
+- 사진과 파일 전송 ([#24](https://github.com/jhikyuinn/FootPrint/issues/24))
+- 앱이 꺼져 있을 때 푸시 알림 ([#23](https://github.com/jhikyuinn/FootPrint/issues/23))
+- HTTPS / WSS 적용과 relay 여러 대 운영 ([#25](https://github.com/jhikyuinn/FootPrint/issues/25))
