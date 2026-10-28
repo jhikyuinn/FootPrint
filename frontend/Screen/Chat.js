@@ -58,7 +58,11 @@ function Chat({route,navigation,alias,pair}){
     // the message list, and whether the user is at its bottom: new messages scroll into view only then
     const messageList = useRef(null);
     const atBottom = useRef(true);
-    const [userList, setUserList] = useState([]);
+    // members whose account was read, by public key: their name. The member list shows the ones that
+    // are in the room's GUN index (live) or that the ledger does not record as left (#41)
+    const [memberNames, setMemberNames] = useState({});
+    const [indexed, setIndexed] = useState({});
+    const [left, setLeft] = useState(new Set());
     const [invitationuser, setInvitationuser] = useState("");
     // { hash, records } while the Check Hash sheet is open: the current hash and the room's ledger history
     const [ledger, setLedger] = useState(null);
@@ -158,7 +162,9 @@ function Chat({route,navigation,alias,pair}){
 
   // The room lists only its members' public keys; who they are and what they wrote is in each member's own space
   function initRoom() {
-    setUserList([]);
+    setMemberNames({});
+    setIndexed({});
+    setLeft(new Set());
     gun.get(room).get('members').get(pair.pub).put(true);
     registerRoom();
   }
@@ -172,7 +178,8 @@ function Chat({route,navigation,alias,pair}){
   // so the sender is known: no signature check against every member, and the name is the signed account alias.
   // One subscription per member feeds the member list, the screen and the room hash.
   // Members come from the room's index in GUN (live, but anyone can remove an entry) and from the ledger
-  // (its records cannot be removed), so a member taken off the index still shows.
+  // (its records cannot be removed), so a member taken off the index still shows unless the ledger records
+  // them leaving. A leave is recorded before the index entry goes, so an index change re-reads the ledger.
   function getMessage() {
     const current = visit.current;
     const members = {};
@@ -186,12 +193,10 @@ function Chat({route,navigation,alias,pair}){
       const name = (await aliasAccounts(user.alias)).length > 1 ? user.alias + " #" + pub.slice(0, 6) : user.alias;
       if(current !== visit.current) { return; }
       // GUN answers one member at a time, after this returns: add each one through state so the list redraws.
-      // A member who left is not listed, but their messages still load: the room hash covers them.
-      ledgerLeft.current.then((left) => {
-        if(current === visit.current && !left.has(pub)) { setUserList((list) => [...list, { pub: pub, name: name }]); }
-      });
-      // read once per visit, so a changed photo shows the next time the room is opened; messages do not wait for it
-      readOnce(gun.get('~' + pub).get('profile')).then((data) => {
+      // A member who left is not listed (see listed), but their messages still load: the room hash covers them.
+      setMemberNames((all) => ({ ...all, [pub]: name }));
+      // live, so a changed photo or introduction shows at once; messages do not wait for it
+      listen(gun.get('~' + pub).get('profile')).on((data) => {
         if(current === visit.current) { setProfiles((all) => ({ ...all, [pub]: cleanProfile(data) })); }
       });
       const secret = roomKey.current || user.epub;
@@ -217,10 +222,23 @@ function Chat({route,navigation,alias,pair}){
         });
       });
     };
-    listen(gun.get(room).get('members').map()).on((isMember, pub) => { if(isMember) { addMember(pub); } });
+    // re-reads who left, at most once per burst of index changes (opening a room replays every entry)
+    let rereading = null;
+    const rereadLeft = () => {
+      clearTimeout(rereading);
+      rereading = setTimeout(() => roomHistory(room).then((records) => {
+        if(current === visit.current) { setLeft(leftPubs(records)); }
+      }).catch(() => {}), 300);
+    };
+    listen(gun.get(room).get('members').map()).on((isMember, pub) => {
+      if(current !== visit.current) { return; }
+      setIndexed((all) => ({ ...all, [pub]: !!isMember }));
+      if(isMember) { addMember(pub); } else { rereadLeft(); }
+    });
     const history = roomHistory(room).catch(() => []);
     ledgerPubs.current = history.then(recordedPubs);
     ledgerLeft.current = history.then(leftPubs);
+    ledgerLeft.current.then((pubs) => { if(current === visit.current) { setLeft(pubs); } });
     ledgerPubs.current.then((pubs) => pubs.forEach(addMember));
   }
 
@@ -397,6 +415,9 @@ function Chat({route,navigation,alias,pair}){
       Alert.alert("Leave room", question, [{ text: "Cancel", style: "cancel" }, { text: "Leave", style: "destructive", onPress: leaveRoom }]);
     }
 
+    // in the index (live; someone coming back is there before their enter record) or not left on the ledger
+    const listed = Object.entries(memberNames).filter(([pub]) => indexed[pub] || !left.has(pub)).map(([pub, name]) => ({ pub, name }));
+
     function modalopen(){
       setIsModalVisible(!isModalVisible)
     }
@@ -454,7 +475,7 @@ function Chat({route,navigation,alias,pair}){
               <Ionicons name="exit-outline" size={24} color={colors.accent} /><Text style={[common.boldText, styles.Textsize]}>Leave Room</Text>
             </TouchableOpacity>
           <Text style={styles.sectionTitle}>User</Text>
-            {userList.map(user => <View key={user.pub} accessibilityLabel={"Member " + user.name} style={[common.row, styles.row]}><Ionicons name={user.pub==pair.pub?"person-circle":"person-circle-outline"} size={25} color={user.pub==pair.pub?colors.primary:colors.subtext} /><Text style={{color:colors.text}}> {user.name}</Text></View>)}
+            {listed.map(user => <View key={user.pub} accessibilityLabel={"Member " + user.name} style={[common.row, styles.row]}><Ionicons name={user.pub==pair.pub?"person-circle":"person-circle-outline"} size={25} color={user.pub==pair.pub?colors.primary:colors.subtext} /><Text style={{color:colors.text}}> {user.name}</Text></View>)}
           </View>
         </Modal>
 
