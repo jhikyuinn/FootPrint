@@ -5,6 +5,7 @@ import { Header } from 'react-native-elements';
 import axios from 'axios';
 import { API_URL } from '../lib/config';
 import { saveRoomKey, openSealedKey } from '../lib/secretRoom';
+import { signed } from '../lib/ledger';
 import NotificationList from './notificationlist';
 import common, { colors } from '../lib/styles';
 
@@ -17,8 +18,10 @@ function Notification({alias,pair,navigation}){
       return navigation.addListener('focus', load)
     }, [navigation])
 
-    const load=()=>{
-      axios.get(`${API_URL}/api/invitations/${encodeURIComponent(alias)}`).then((res) => {
+    // invitations are kept by public key, and only its owner's signature can list them (#35)
+    const load=async()=>{
+      const { signed: proof } = await signed({ List: pair.pub }, pair)
+      axios.get(`${API_URL}/api/invitations/${encodeURIComponent(pair.pub)}`, { params: { signed: proof } }).then((res) => {
         setInvites(res.data.filter((invite) => invite.Status === "pending"))
       }).catch((err) => {
         console.log("notification: "+err.message)
@@ -33,11 +36,10 @@ function Notification({alias,pair,navigation}){
         await saveRoomKey(invite.RoomNumber, key, pair)
       }
       try {
-        await axios.post(`${API_URL}/api/invitation/respond`, {
+        await axios.post(`${API_URL}/api/invitation/respond`, await signed({
           RoomNumber: invite.RoomNumber,
-          To: alias,
           Status: accepted ? "accepted" : "declined",
-        })
+        }, pair))
       } catch(err) {
         alert("Invitation: "+err.message)
         return

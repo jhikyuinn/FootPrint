@@ -76,7 +76,7 @@ The wallet created in `apiserver/wallet` holds private keys and is git-ignored.
 - Each record is written once, under the composite key `record~<room>~<seq>`. The room key only keeps the host, the record count, the last hash and the number of messages it covers (#16).
 - `recordHash(HostID, RoomNumber, Hash, Function, PostID, HostPub, PostPub, Seq, PrevHash, Count, Sig)`: a `Seq` that is already written is rejected, and a hashed record must name the room's last hash as `PrevHash` and cannot cover fewer messages (`Count`) than the last one (#17). The record time is the transaction time, not a time the app sends. `Sig` is the signed request the API server checked (#20).
 - The first record fixes the room's host; a later `create` is stored as `enter`.
-- Invitations are stored under their own key (`invite~<to>~<room>`), not as room records.
+- Invitations are stored under their own key (`invite~<invited public key>~<room>`), not as room records. `/api/invite` must be signed by the sender, and `/api/invitations/:pub` and `/api/invitation/respond` by the invited key; the sender's key and signature are kept (`FromPub`, `Sig`, #35).
 - New chaincode functions `queryAllRecords` and `queryHistory` (the old `queryHistory` was a commercial-paper leftover that could not run), with the routes `/api/queryallrecords` and `/api/history/:room`.
 - `GET /api/query/:room` answers `"None"` for an unknown room, and errors return HTTP 500 instead of stopping the server.
 - `initLedger` stores its two sample records under their room names (`Ryu0808`, `COM1206`) instead of `Record0` and `Record1`, so `queryRecord` can find them.

@@ -92,3 +92,16 @@ test('a hashed record must build on the last hash and cannot cover fewer message
     const history = JSON.parse(await contract.queryHistory(ctx, 'room1')).map((e) => [e.Value.Hash, e.Value.PrevHash, e.Value.Count]);
     assert.deepStrictEqual(history, [['h0', '', 0], ['h5', 'h0', 5], ['', '', 0], ['h7', 'h5', 7]]);
 });
+
+test('invitations are kept by the invited public key, with the sender signature', async () => {
+    const ctx = newCtx();
+    await contract.invite(ctx, 'room1', 'alice', 'pubA', 'epubA', 'bob', 'pubB', '2024-01-01', '', 'SEA{signed}');
+    await contract.invite(ctx, 'room2', 'alice', 'pubA', 'epubA', 'bob2', 'pubC', '2024-01-01', '', 'SEA{other}');
+    await contract.respondInvitation(ctx, 'room1', 'pubB', 'accepted');
+
+    const forBob = JSON.parse(await contract.queryInvitations(ctx, 'pubB'));
+    assert.deepStrictEqual(forBob.map((i) => [i.RoomNumber, i.FromPub, i.Sig, i.Status]), [['room1', 'pubA', 'SEA{signed}', 'accepted']]);
+    // the alias is not the key: nobody finds bob's invitations by his name
+    assert.deepStrictEqual(JSON.parse(await contract.queryInvitations(ctx, 'bob')), []);
+    await assert.rejects(contract.respondInvitation(ctx, 'room2', 'pubB', 'accepted'), /No invitation/);
+});
