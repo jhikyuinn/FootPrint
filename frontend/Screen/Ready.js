@@ -5,7 +5,7 @@ import { Header } from 'react-native-elements';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import HistoryList from './historylist';
 import DesignButton from '../Components/DesignButton';
-import gun, { GUN, SEA, entered, lastRead } from '../lib/gun';
+import gun, { GUN, SEA, entered, lastRead, ROOM_NAME } from '../lib/gun';
 import { queryRoom, roomHistory, recordedPubs, recordHash } from '../lib/ledger';
 import { makeSecretRoom, saveRoomKey } from '../lib/secretRoom';
 import { unreadCount, hashMessages } from '../lib/messages';
@@ -75,8 +75,7 @@ function Ready({alias,pair,navigation}){
     const EntranceBtn=async()=>{
       const name = roomState.trim()
       if(!name) { return }
-      // room names become GUN node names and URL parts: # breaks GUN, ~ is GUN's user space
-      if(!/^[0-9A-Za-z가-힣_-]{1,30}$/.test(name)) { alert("Room names can use letters, numbers, - and _ (up to 30)."); return }
+      if(!ROOM_NAME.test(name)) { alert("Room names can use letters, numbers, - and _ (up to 30)."); return }
       let recorded
       try {
         recorded = await queryRoom(name)

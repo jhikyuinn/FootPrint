@@ -8,7 +8,7 @@ import { Header } from 'react-native-elements';
 import Message from '../Components/Message';
 import DesignButton from '../Components/DesignButton';
 import LedgerSheet from '../Components/LedgerSheet';
-import gun, { GUN, SEA, entered, lastRead, readOnce, WAIT } from '../lib/gun';
+import gun, { GUN, SEA, entered, lastRead, readOnce, WAIT, ROOM_NAME } from '../lib/gun';
 import { insertByTime, hashMessages, hashFirst, nextRecord, showTime } from '../lib/messages';
 import { buildMinutes, minuteMessage, minuteSender } from '../lib/minutes';
 import { queryRoom, roomHistory, recordedPubs, recordHash } from '../lib/ledger';
@@ -105,6 +105,8 @@ function Chat({route,navigation,alias,pair}){
 
   // An encrypted room starts once its key is known: from this user's saved keys, or from the password
   async function prepare() {
+    // invitations come from the API, which anyone can call (#20), so the name is checked here, where every way in meets
+    if(!ROOM_NAME.test(room)) { alert("This room name is not allowed."); Back(); return; }
     const current = visit.current;
     roomKey.current = null;
     stored.current = {};

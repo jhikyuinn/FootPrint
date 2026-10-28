@@ -83,6 +83,9 @@ gun._.on('hi', function(peer) {
 // entered.get(alias).get(name) = true for every room that user has entered
 export const rooms = gun.get('footprint/rooms');
 export const entered = gun.get('footprint/entered');
+// room names become GUN node names and URL parts: # breaks GUN, ~ is GUN's user space, / could reach
+// the nodes above (a room "footprint/rooms" would write into the room list, #31)
+export const ROOM_NAME = /^[0-9A-Za-z가-힣_-]{1,30}$/;
 // lastRead().get(name) = GUN time this user last had the room open (in the user's own space)
 export const lastRead = () => gun.user().get('lastread');
 
