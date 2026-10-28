@@ -44,3 +44,15 @@ export const unreadCount = (times, readAt) =>
 
 // New messages store Date.now(); older ones stored a locale string, which is shown as is.
 export const showTime = (t) => (/^\d+$/.test(String(t)) ? new Date(Number(t)).toLocaleString() : t);
+
+// Public keys whose latest ledger record in the room is a leave (#41). records are oldest first.
+// Any later record by the same key (enter, or a hash it recorded) makes it a member again.
+export const leftPubs = (records) => {
+  const left = new Set();
+  records.forEach((record) => {
+    const pub = record.Value.postpub;
+    if(!pub) { return; }
+    if(record.Value.function === 'leave') { left.add(pub); } else { left.delete(pub); }
+  });
+  return left;
+};

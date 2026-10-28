@@ -26,25 +26,38 @@ function Ready({alias,pair,navigation}){
 
     useEffect(() => {
         const subscriptions = history()
-        return () => subscriptions.forEach((subscription) => subscription.off())
+        return () => Object.values(subscriptions).flat().forEach((subscription) => subscription.off())
     }, [])
 
     // rooms this user has entered, read from GUN: the names from the user's entered rooms,
-    // the host from the ledger, which fixes it. Stays subscribed, so a room appears as soon as it is entered.
+    // the host from the ledger, which fixes it. Stays subscribed, so a room appears as soon as it is entered,
+    // and goes (with its unread count subscriptions) once it is left (#41).
+    // Returns the subscriptions by room name; "" holds the list's own.
     const history=()=>{
-      const subscriptions = []
-      const watching = {}
-      subscriptions.push(entered.get(alias).map().on((isEntered, name) => {
-        if(!isEntered || watching[name]) { return }
-        watching[name] = true
+      const rooms = { "": [] }
+      const drop = (current, name) => { const next = {...current}; delete next[name]; return next }
+      rooms[""].push(entered.get(alias).map().on((isEntered, name) => {
+        if(!isEntered) {
+          if(!rooms[name]) { return }
+          rooms[name].forEach((subscription) => subscription.off())
+          delete rooms[name]
+          setRoomenterInfo((current) => drop(current, name))
+          setMessageTimes((current) => drop(current, name))
+          setReadAt((current) => drop(current, name))
+          return
+        }
+        if(rooms[name]) { return }
+        const subscriptions = rooms[name] = []
         setRoomenterInfo((current) => ({...current, [name]: {name: name, host: (current[name] || {}).host}}))
         // only message times are read here; nothing is decrypted until the room is opened
         subscriptions.push(lastRead().get(name).on((at) => setReadAt((current) => ({...current, [name]: at || 0}))))
         // messages are in each member's own space; members come from GUN and the ledger (see Chat getMessage).
         // This user's own messages are never unread, even when the app quit without leaving the room (#63)
         const members = {}
+        // false once the room is left: the ledger can answer after that
+        const live = () => rooms[name] === subscriptions
         const watchMember = (pub) => {
-          if(members[pub] || pub === pair.pub || SEA.opt.pub('~' + pub) !== pub) { return }
+          if(!live() || members[pub] || pub === pair.pub || SEA.opt.pub('~' + pub) !== pub) { return }
           members[pub] = true
           subscriptions.push(gun.get('~' + pub).get('msgs').get(name).map().on((msg, key) => {
             if(!msg || msg.message === undefined) { return }
@@ -56,11 +69,11 @@ function Ready({alias,pair,navigation}){
         roomHistory(name).then((records) => {
           recordedPubs(records).forEach(watchMember)
           const latest = records[records.length - 1]
-          if(!latest || !latest.Value.hostid) { return }
+          if(!live() || !latest || !latest.Value.hostid) { return }
           setRoomenterInfo((current) => ({...current, [name]: {name: name, host: latest.Value.hostid}}))
         }).catch(() => {})
       }))
-      return subscriptions
+      return rooms
     }
 
     const enterRoom=(name)=>{
