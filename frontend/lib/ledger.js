@@ -9,7 +9,8 @@ export const queryRoom = async (room) => (await axios.get(`${API_URL}/api/query/
 // Every ledger record of the room, oldest first.
 export const roomHistory = async (room) => (await axios.get(`${API_URL}/api/history/${encodeURIComponent(room)}`)).data;
 
-// Public keys of everyone the ledger has recorded in the room. Its records cannot be removed, so neither can these members.
+// Public keys of everyone the ledger has recorded in the room. Its records cannot be removed, so neither can these members:
+// their messages always count for the room hash. Only their own leave record takes them off the member list (leftPubs, #41).
 export const recordedPubs = (records) => records.flatMap((record) => [record.Value.hostpub, record.Value.postpub]).filter(Boolean);
 
 // Writes a record of a room: { RoomNumber, Function, HostID, HostPub, PostID, PostPub, Hash }. The ledger sets its time.

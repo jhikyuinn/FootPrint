@@ -2,14 +2,16 @@ import {useState,useEffect,useReducer,useRef} from 'react';
 import axios from 'axios';
 import { API_URL } from '../lib/config';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import {Modal, View, Text,TextInput,StyleSheet,ScrollView, KeyboardAvoidingView, ActivityIndicator, Platform, TouchableOpacity, Share} from 'react-native';
+import {Modal, View, Text,TextInput,StyleSheet,ScrollView, KeyboardAvoidingView, ActivityIndicator, Platform, TouchableOpacity, Share, Alert} from 'react-native';
 import Header from '../Components/Header';
 
 import Message from '../Components/Message';
 import DesignButton from '../Components/DesignButton';
 import LedgerSheet from '../Components/LedgerSheet';
+import ProfileSheet from '../Components/ProfileSheet';
+import { cleanProfile } from '../lib/profileData';
 import gun, { GUN, SEA, entered, lastRead, readOnce, WAIT, ROOM_NAME } from '../lib/gun';
-import { insertByTime, hashMessages, hashFirst, nextRecord, showTime } from '../lib/messages';
+import { insertByTime, hashMessages, hashFirst, nextRecord, showTime, leftPubs } from '../lib/messages';
 import { buildMinutes, minuteMessage, minuteSender } from '../lib/minutes';
 import { queryRoom, roomHistory, recordedPubs, recordHash, signed } from '../lib/ledger';
 import { readRoom, unlockRoom, saveRoomKey, loadRoomKey, aliasAccounts, findUser, sealKeyFor } from '../lib/secretRoom';
@@ -60,6 +62,9 @@ function Chat({route,navigation,alias,pair}){
     const [invitationuser, setInvitationuser] = useState("");
     // { hash, records } while the Check Hash sheet is open: the current hash and the room's ledger history
     const [ledger, setLedger] = useState(null);
+    // members' checked profiles by public key ({ photo, bio }), and the sender ({ pub, name }) whose profile sheet is open
+    const [profiles, setProfiles] = useState({});
+    const [shownProfile, setShownProfile] = useState(null);
     // key of an encrypted room; null in a free room, where messages use the sender's epub as before
     const roomKey = useRef(null);
     // room info while an encrypted room waits for its password
@@ -75,6 +80,12 @@ function Chat({route,navigation,alias,pair}){
     const visit = useRef(0);
     // the public keys the ledger has recorded in the room (a promise, set by getMessage)
     const ledgerPubs = useRef(Promise.resolve([]));
+    // the keys among them whose latest record is a leave (a Set): they stay for the hash, not in the member list
+    const ledgerLeft = useRef(Promise.resolve(new Set()));
+    // set once Leave room starts, so closing the screen does not mark the room read or record it again
+    const leaving = useRef(false);
+    // the entry record being written: leaving waits for it, as the ledger rejects two writes to a room at once
+    const entering = useRef(Promise.resolve());
     // the pending automatic record, restarted by every message that arrives
     const autoTimer = useRef(null);
 
@@ -92,8 +103,9 @@ function Chat({route,navigation,alias,pair}){
     useEffect(() => {
       if(!opened) { return; }
       return () => {
-        lastRead().get(room).put(GUN.state());
         clearTimeout(autoTimer.current);
+        if(leaving.current) { return; }
+        lastRead().get(room).put(GUN.state());
         // shortcut: leaving right after opening may record a chat that is still syncing, if its missing
         // messages come after the last hash; waiting for AUTO_QUIET first would need the screen to stay
         autoRecord(Object.values(stored.current), 1);
@@ -131,7 +143,7 @@ function Chat({route,navigation,alias,pair}){
     lastRead().get(room).put(GUN.state());
     initRoom();
     getMessage();
-    recordEntry();
+    entering.current = recordEntry();
   }
 
   async function unlock() {
@@ -173,8 +185,15 @@ function Chat({route,navigation,alias,pair}){
       // GUN lets several accounts take one alias: then the start of the key tells them apart
       const name = (await aliasAccounts(user.alias)).length > 1 ? user.alias + " #" + pub.slice(0, 6) : user.alias;
       if(current !== visit.current) { return; }
-      // GUN answers one member at a time, after this returns: add each one through state so the list redraws
-      setUserList((list) => [...list, { pub: pub, name: name }]);
+      // GUN answers one member at a time, after this returns: add each one through state so the list redraws.
+      // A member who left is not listed, but their messages still load: the room hash covers them.
+      ledgerLeft.current.then((left) => {
+        if(current === visit.current && !left.has(pub)) { setUserList((list) => [...list, { pub: pub, name: name }]); }
+      });
+      // read once per visit, so a changed photo shows the next time the room is opened; messages do not wait for it
+      readOnce(gun.get('~' + pub).get('profile')).then((data) => {
+        if(current === visit.current) { setProfiles((all) => ({ ...all, [pub]: cleanProfile(data) })); }
+      });
       const secret = roomKey.current || user.epub;
       listen(gun.get('~' + pub).get('msgs').get(room).map()).on(async (msg, key) => {
         if(current !== visit.current || !msg || msg.message === undefined) { return; }
@@ -199,7 +218,9 @@ function Chat({route,navigation,alias,pair}){
       });
     };
     listen(gun.get(room).get('members').map()).on((isMember, pub) => { if(isMember) { addMember(pub); } });
-    ledgerPubs.current = roomHistory(room).then(recordedPubs).catch(() => []);
+    const history = roomHistory(room).catch(() => []);
+    ledgerPubs.current = history.then(recordedPubs);
+    ledgerLeft.current = history.then(leftPubs);
     ledgerPubs.current.then((pubs) => pubs.forEach(addMember));
   }
 
@@ -216,13 +237,14 @@ function Chat({route,navigation,alias,pair}){
     return recordHash({ ...by, Function: "create", HostID: alias, HostPub: pair.pub }, pair);
   };
 
-  // Records the room's creation, or this user's first entry (the ledger keeps them a member), without a hash:
+  // Records the room's creation, or this user's first entry (or return after leaving), without a hash:
   // right after opening, messages are still syncing, and a hash of only part of them would become the
   // room's latest ledger hash. Hashes are recorded with Record Hash, once the chat has loaded.
   const recordEntry = async () => {
     try {
       const latest = await queryRoom(room);
-      if(latest === "None" || !(await ledgerPubs.current).includes(pair.pub)) { await record("enter", latest, ""); }
+      const [pubs, left] = await Promise.all([ledgerPubs.current, ledgerLeft.current]);
+      if(latest === "None" || !pubs.includes(pair.pub) || left.has(pair.pub)) { await record("enter", latest, ""); }
     } catch(err) {
       alert("Room record: " + err.message);
     }
@@ -345,6 +367,36 @@ function Chat({route,navigation,alias,pair}){
       setInvitationuser("")
     }
 
+    // Leaves the room (#41): the ledger records the leave first, so a failed record changes nothing.
+    // Then the room goes from this user's list, the room's member index, and this user's saved room key
+    // and read time, so an encrypted room needs its password or an invitation again. Messages stay: the hash covers them.
+    const leaveRoom = async () => {
+      if(leaving.current) { return; }
+      leaving.current = true;
+      try {
+        await entering.current;
+        const latest = await queryRoom(room);
+        if(latest !== "None") { await record("leave", latest, ""); }
+      } catch(err) {
+        leaving.current = false;
+        alert("Could not leave the room: " + err.message);
+        return;
+      }
+      entered.get(alias).get(room).put(null);
+      gun.get(room).get('members').get(pair.pub).put(null);
+      gun.user().get('roomkeys').get(room).put(null);
+      lastRead().get(room).put(null);
+      setIsModalVisible(false);
+      Back();
+    }
+
+    // Alert.alert has no buttons on web, so web asks with the browser's confirm
+    const confirmLeave = () => {
+      const question = "Leave " + room + "?" + (roomKey.current ? "\nComing back will need the room password or an invitation." : "");
+      if(Platform.OS === "web") { if(window.confirm(question)) { leaveRoom(); } return; }
+      Alert.alert("Leave room", question, [{ text: "Cancel", style: "cancel" }, { text: "Leave", style: "destructive", onPress: leaveRoom }]);
+    }
+
     function modalopen(){
       setIsModalVisible(!isModalVisible)
     }
@@ -398,8 +450,11 @@ function Chat({route,navigation,alias,pair}){
                 <Ionicons name="mail-outline" size={30} color={colors.primary}/>
               </TouchableOpacity>
           </View>
+            <TouchableOpacity style={styles.rowicon} onPress={() => confirmLeave()}>
+              <Ionicons name="exit-outline" size={24} color={colors.accent} /><Text style={[common.boldText, styles.Textsize]}>Leave Room</Text>
+            </TouchableOpacity>
           <Text style={styles.sectionTitle}>User</Text>
-            {userList.map(user => <View key={user.pub} style={[common.row, styles.row]}><Ionicons name={user.pub==pair.pub?"person-circle":"person-circle-outline"} size={25} color={user.pub==pair.pub?colors.primary:colors.subtext} /><Text style={{color:colors.text}}> {user.name}</Text></View>)}
+            {userList.map(user => <View key={user.pub} accessibilityLabel={"Member " + user.name} style={[common.row, styles.row]}><Ionicons name={user.pub==pair.pub?"person-circle":"person-circle-outline"} size={25} color={user.pub==pair.pub?colors.primary:colors.subtext} /><Text style={{color:colors.text}}> {user.name}</Text></View>)}
           </View>
         </Modal>
 
@@ -435,7 +490,7 @@ function Chat({route,navigation,alias,pair}){
                   onContentSizeChange={() => { if(atBottom.current) { messageList.current.scrollToEnd({animated: true}); } }}>
                   {state.messages.map((message) => (
                       <View key={message.key}>
-                          <Message message={message} mine={message.pub === pair.pub}/>
+                          <Message message={message} mine={message.pub === pair.pub} photo={profiles[message.pub]?.photo} onPressSender={() => setShownProfile({ pub: message.pub, name: message.name })}/>
                       </View>
                   ))}
               </ScrollView>
@@ -447,6 +502,7 @@ function Chat({route,navigation,alias,pair}){
               </View>
           </View>
           </KeyboardAvoidingView>
+          {shownProfile && <ProfileSheet name={shownProfile.name} {...profiles[shownProfile.pub]} onClose={() => setShownProfile(null)}/>}
           {ledger && <LedgerSheet hash={ledger.hash} records={ledger.records} messages={ledger.messages} onClose={() => setLedger(null)}/>}
       </View>
 
