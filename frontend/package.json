@@ -36,7 +36,7 @@
     "react-native-web": "^0.21.2",
     "react-native-webview": "13.16.1",
     "text-encoding": "^0.7.0",
-    "webview-crypto": "^0.1.13"
+    "webview-crypto": "^0.1.14"
   },
   "devDependencies": {
     "@babel/core": "^7.12.9",
