@@ -8,7 +8,7 @@ The FootPrint-specific parts of the Fabric backend, extracted from
 | Path | What it is |
 | --- | --- |
 | `chaincode/P2Pmessage/javascript` | The chaincode (`lib/Record.js`): `initLedger`, `queryRecord`, `queryAllRecords`, `queryHistory`, `recordHash`, and `invite`, `queryInvitations`, `respondInvitation` |
-| `apiserver` | Express REST server the app calls, plus the setup scripts `enrollAdmin` and `registerUser` |
+| `apiserver` | Express REST server the app calls, connected through the Fabric Gateway (`@hyperledger/fabric-gateway`) |
 | `startFabric.sh` / `networkDown.sh` | Start the test network and deploy the chaincode as `P2Pmessage` / stop it |
 
 ## Running
@@ -40,17 +40,22 @@ Run the network from Linux or WSL2 (Docker Desktop with WSL integration), not fr
     # 5. API server (Node 18 or newer; can run on Windows while the network runs in WSL)
     cd apiserver
     npm install
-    node enrollAdmin
-    node registerUser
     node apiserver
 
-`bash networkDown.sh` stops the network and deletes the ledger and the wallet, so run
-`enrollAdmin` and `registerUser` again after the next `startFabric.sh`.
+The API server connects to Org1's peer (`localhost:7051`, set `PEER_ENDPOINT` to change it) as the test
+network's `User1`, with the certificate and key that `network.sh up -ca` writes under
+`fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/users/User1@org1.example.com/msp`.
+There is no wallet or enrollment step. `bash networkDown.sh` stops the network and deletes the ledger;
+the next `startFabric.sh` makes new certificates, which the API server reads when it starts.
+
+To deploy a changed chaincode without losing the ledger, raise the version and sequence instead of
+restarting the network (in WSL, from `fabric-samples/test-network`):
+
+    ./network.sh deployCC -ccn P2Pmessage -ccv 2 -ccs 2 -ccl javascript -ccp ../../chaincode/P2Pmessage/javascript/
 
 The API server listens on `0.0.0.0:1206`; set `HOST` and `PORT` to change it. The app reads
 the address from `EXPO_PUBLIC_API_URL` (default `http://localhost:1206`, see `frontend/lib/config.js`),
 so point it at the machine running the API server.
-The wallet created in `apiserver/wallet` holds private keys and is git-ignored.
 
 ### Problems seen on WSL with the repository on a Windows drive (`/mnt/c`)
 
@@ -67,7 +72,7 @@ The wallet created in `apiserver/wallet` holds private keys and is git-ignored.
 ## Changes made during extraction
 
 - The connection profile path in `apiserver/*.js` points to `../fabric-samples/test-network` instead of `../../test-network`.
-- `apiserver/package.json` lists `express`, `cors`, `body-parser` and `fabric-network`, which the code requires but the original file did not declare.
+- `apiserver/package.json` lists `express`, `cors` and `body-parser`, which the code requires but the original file did not declare.
 - `startFabric.sh` deploys only the JavaScript chaincode and passes the name `P2Pmessage` directly, so the edit to `test-network/scripts/deployCC.sh` is no longer needed.
 - Left out: the committed wallet identities, the unchanged fabcar copies (Go, Java, TypeScript chaincode and clients), the copied commercial-paper files, and `Go-apiserver`.
 
@@ -98,5 +103,5 @@ hash before it, so the app can check every record against the first `Count` mess
 added messages keep older records matching, a changed message breaks every record that covers it.
 An `enter` record has no hash and leaves the room's last hash as it was.
 
-`apiserver` uses the `fabric-network` SDK, which works with Fabric 2.5 but is deprecated and does
-not work with Fabric 3. Moving to `@hyperledger/fabric-gateway` is the next step if the network is upgraded.
+`apiserver` uses `@hyperledger/fabric-gateway` (#42), the client API for Fabric 2.4 and later, instead of the
+deprecated `fabric-network` SDK, which also brought in the `jsrsasign`, `elliptic` and old `@grpc/grpc-js` vulnerabilities.

@@ -13,9 +13,6 @@ starttime=$(date +%s)
 DIR="$(cd "$(dirname "$0")" && pwd)"
 CC_SRC_PATH="${DIR}/chaincode/P2Pmessage/javascript/"
 
-# clean out any old identites in the wallets
-rm -rf "${DIR}"/apiserver/wallet/*
-
 # launch network; create channel and join peer to channel
 pushd "${DIR}/fabric-samples/test-network"
 ./network.sh down
@@ -31,8 +28,6 @@ Next, start the API server:
 
     cd apiserver
     npm install
-    node enrollAdmin
-    node registerUser
     node apiserver
 
 EOF
