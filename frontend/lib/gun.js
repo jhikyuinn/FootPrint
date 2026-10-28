@@ -80,9 +80,12 @@ gun._.on('hi', function(peer) {
 
 // GUN cannot list its root keys, so every room is also registered here:
 // rooms.get(name) = { name, host, createdAt }: only read, for rooms made before room info moved to the host's space
-// entered.get(alias).get(name) = true for every room that user has entered
 export const rooms = gun.get('footprint/rooms');
-export const entered = gun.get('footprint/entered');
+// entered().get(name) = true for every room this user has entered, null once left (#41).
+// In the user's own space (#85): only their key can change it.
+export const entered = () => gun.user().get('entered');
+// Before #85 the list was public, under the alias: anyone could change it, and accounts sharing an alias shared it.
+const oldEntered = gun.get('footprint/entered');
 // room names become GUN node names and URL parts: # breaks GUN, ~ is GUN's user space, / could reach
 // the nodes above (a room "footprint/rooms" would write into the room list, #31)
 export const ROOM_NAME = /^[0-9A-Za-z가-힣_-]{1,30}$/;
@@ -99,6 +102,19 @@ export const readOnce = (chain) => new Promise((resolve) => {
   const timer = setTimeout(() => resolve(undefined), WAIT * 3);
   setTimeout(() => chain.once((data) => { clearTimeout(timer); resolve(data); }, { wait: WAIT }));
 });
+
+// Copies the old public room list into the user's space, once per account (#85).
+// A room already in the new list, even as left (null), is skipped, so a left room never comes back from the old list.
+// shortcut: the old list may hold rooms someone else put there (or another account with this alias); they are copied too
+export async function moveOldEntered(alias) {
+  const me = gun.user();
+  if(await readOnce(me.get('moved').get('entered'))) { return; }
+  const [old, now] = await Promise.all([readOnce(oldEntered.get(alias)), readOnce(entered())]);
+  Object.keys(old || {}).forEach((name) => {
+    if(name !== '_' && old[name] === true && ROOM_NAME.test(name) && !(now && name in now)) { entered().get(name).put(true); }
+  });
+  me.get('moved').get('entered').put(true);
+}
 
 export { SEA, GUN };
 export default gun;

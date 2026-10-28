@@ -171,7 +171,7 @@ function Chat({route,navigation,alias,pair}){
 
   // Adds the room to this user's entered rooms. The room info itself is made where its type is chosen (Ready).
   function registerRoom() {
-    entered.get(alias).get(room).put(true);
+    entered().get(room).put(true);
   }
 
   // Each member's messages are in their user space (~pub/msgs/room), where only their key can write,
@@ -400,7 +400,7 @@ function Chat({route,navigation,alias,pair}){
         alert("Could not leave the room: " + err.message);
         return;
       }
-      entered.get(alias).get(room).put(null);
+      entered().get(room).put(null);
       gun.get(room).get('members').get(pair.pub).put(null);
       gun.user().get('roomkeys').get(room).put(null);
       lastRead().get(room).put(null);
