@@ -296,8 +296,9 @@ function Chat({route,navigation,alias,pair}){
       }));
       const senders = Object.fromEntries([...new Set(messages.map((m) => m.sender))].map((pub) => [pub, minuteSender(gun._.graph['~' + pub])]));
       const minutes = buildMinutes({ room, by: { alias, pub: pair.pub }, messages, senders, records, exportedAt: new Date().toISOString() });
-      setIsModalVisible(false);
+      // share first, then close the menu: iOS does not open the share sheet over a menu that is still closing
       await saveFile(room + "-minutes.json", JSON.stringify(minutes, null, 2));
+      setIsModalVisible(false);
     } catch(err) {
       alert("Export Minutes: " + err.message);
     }
