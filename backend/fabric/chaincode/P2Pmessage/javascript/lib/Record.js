@@ -51,7 +51,8 @@ class Record extends Contract {
         return JSON.stringify(allResults);
     }
 
-    // Function is one of create, enter, record. PostID is the user the record is about.
+    // Function is one of create, enter, record, leave (#41). PostID is the user the record is about.
+    // The chaincode does not check it: the app reads a leave as PostID leaving the room's member list.
     // HostPub and PostPub are the public keys of the host and of PostID (empty from older clients).
     // Seq is the record number the caller expects to write; empty appends. A taken Seq is rejected,
     // so two callers recording the same state cannot both succeed.
