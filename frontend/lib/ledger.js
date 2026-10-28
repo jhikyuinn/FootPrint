@@ -13,6 +13,8 @@ export const roomHistory = async (room) => (await axios.get(`${API_URL}/api/hist
 export const recordedPubs = (records) => records.flatMap((record) => [record.Value.hostpub, record.Value.postpub]).filter(Boolean);
 
 // Writes a record of a room: { RoomNumber, Function, HostID, HostPub, PostID, PostPub, Hash }. The ledger sets its time.
-// Signed with the user's pair, so the API server knows the record comes from PostPub (#20); At makes it expire.
-export const recordHash = async (record, pair) =>
-  axios.post(`${API_URL}/api/recordhash`, { signed: await SEA.sign({ ...record, At: Date.now() }, pair), pub: pair.pub });
+export const recordHash = async (record, pair) => axios.post(`${API_URL}/api/recordhash`, await signed(record, pair));
+
+// { signed, pub }: the payload signed with the user's pair, so the API server knows who sent it (#20, #35).
+// At makes it expire, so a captured request cannot be sent again later.
+export const signed = async (payload, pair) => ({ signed: await SEA.sign({ ...payload, At: Date.now() }, pair), pub: pair.pub });

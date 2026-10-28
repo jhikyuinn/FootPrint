@@ -58,6 +58,10 @@ async function connect() {
     return network.getContract('P2Pmessage');
 }
 
+function unsigned(res) {
+    res.status(401).json({ error: 'A request signed in the last few minutes is required' });
+}
+
 function sendError(res, error) {
     console.error(`Failed to evaluate transaction: ${error}`);
     res.status(500).json({ error: error.message });
@@ -130,10 +134,7 @@ app.post('/api/recordhash', async function(req, res){
         // the record is signed by the user it is about (PostPub); a host key other than the signer's is refused,
         // so nobody can create a room in someone else's name. The signature is kept in the record.
         const data = await readSigned(req.body);
-        if (!data) {
-            res.status(401).json({ error: 'A request signed in the last few minutes is required' });
-            return;
-        }
+        if (!data) { unsigned(res); return; }
         const { HostID, RoomNumber, Hash, Function, PostID, HostPub, PostPub, Seq, PrevHash, Count } = data;
         if (!HostID || !RoomNumber) {
             res.status(400).json({ error: 'HostID and RoomNumber are required' });
@@ -153,44 +154,54 @@ app.post('/api/recordhash', async function(req, res){
     }
 });
 
-// Invitations are stored apart from the room records, so they never replace a room's latest hash
+// Invitations are stored apart from the room records, so they never replace a room's latest hash.
+// Every invitation route needs a signed request (#35): the sender signs an invitation, the invited user
+// (ToPub) signs reading and answering theirs. The sender's key and signature are kept in the invitation.
+// Signed { RoomNumber, From, FromEpub, To, ToPub, DateTime, Key, At }
 app.post('/api/invite', async function(req, res){
     try{
-        const { RoomNumber, From, FromEpub, To, DateTime, Key } = req.body;
-        if (!RoomNumber || !From || !To) {
-            res.status(400).json({ error: 'RoomNumber, From and To are required' });
+        const data = await readSigned(req.body);
+        if (!data) { unsigned(res); return; }
+        const { RoomNumber, From, FromEpub, To, ToPub, DateTime, Key } = data;
+        if (!RoomNumber || !From || !ToPub) {
+            res.status(400).json({ error: 'RoomNumber, From and ToPub are required' });
             return;
         }
         const contract = await getContract();
-        await contract.submitTransaction('invite', RoomNumber, From, FromEpub || '', To, DateTime || '', Key || '');
-        res.send({ RoomNumber, From, To });
+        await contract.submitTransaction('invite', RoomNumber, From, req.body.pub, FromEpub || '', To || '', ToPub, DateTime || '', Key || '', req.body.signed);
+        res.send({ RoomNumber, From, To, ToPub });
     } catch (error) {
         sendError(res, error);
     }
 });
 
-// Every invitation sent to a user: [{ RoomNumber, From, FromEpub, To, DateTime, Key, Status }]
-app.get('/api/invitations/:user', async function (req,res){
+// Every invitation sent to a public key: [{ RoomNumber, From, FromPub, FromEpub, To, ToPub, DateTime, Key, Sig, Status }].
+// Query ?signed= is that key's signature of { List: <pub>, At }, so only its owner can read the list.
+app.get('/api/invitations/:pub', async function (req,res){
     try{
+        const data = await readSigned({ signed: req.query.signed, pub: req.params.pub });
+        if (!data || data.List !== req.params.pub) { unsigned(res); return; }
         const contract = await getContract();
-        const result = await contract.evaluateTransaction('queryInvitations', req.params.user);
+        const result = await contract.evaluateTransaction('queryInvitations', req.params.pub);
         res.send(JSON.parse(result));
     } catch (error) {
         sendError(res, error);
     }
 });
 
-// { RoomNumber, To, Status: accepted | declined }
+// Signed by the invited user: { RoomNumber, Status: accepted | declined, At }
 app.post('/api/invitation/respond', async function(req, res){
     try{
-        const { RoomNumber, To, Status } = req.body;
-        if (!RoomNumber || !To || (Status !== 'accepted' && Status !== 'declined')) {
-            res.status(400).json({ error: 'RoomNumber, To and Status (accepted or declined) are required' });
+        const data = await readSigned(req.body);
+        if (!data) { unsigned(res); return; }
+        const { RoomNumber, Status } = data;
+        if (!RoomNumber || (Status !== 'accepted' && Status !== 'declined')) {
+            res.status(400).json({ error: 'RoomNumber and Status (accepted or declined) are required' });
             return;
         }
         const contract = await getContract();
-        await contract.submitTransaction('respondInvitation', RoomNumber, To, Status);
-        res.send({ RoomNumber, To, Status });
+        await contract.submitTransaction('respondInvitation', RoomNumber, req.body.pub, Status);
+        res.send({ RoomNumber, ToPub: req.body.pub, Status });
     } catch (error) {
         sendError(res, error);
     }

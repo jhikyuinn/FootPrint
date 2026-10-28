@@ -62,13 +62,13 @@ export async function aliasAccounts(alias) {
   return Object.keys(ref || {}).filter((k) => k[0] === '~').map((k) => k.slice(1));
 }
 
-// A user's public encryption key by alias: undefined when there is no such user,
+// A user's { pub, epub } by alias: undefined when there is no such user,
 // null when several accounts share the alias, so the caller cannot pick the wrong one (#32)
-export async function findUserEpub(alias) {
+export async function findUser(alias) {
   const pubs = await aliasAccounts(alias);
   if(pubs.length > 1) { return null; }
   const user = pubs[0] && await readOnce(gun.get('~' + pubs[0]));
-  return user ? user.epub : undefined;
+  return user && user.epub ? { pub: pubs[0], epub: user.epub } : undefined;
 }
 
 // The room key encrypted so only the user with `epub` can open it (with the sender's epub)

@@ -11,8 +11,8 @@ import LedgerSheet from '../Components/LedgerSheet';
 import gun, { GUN, SEA, entered, lastRead, readOnce, WAIT, ROOM_NAME } from '../lib/gun';
 import { insertByTime, hashMessages, hashFirst, nextRecord, showTime } from '../lib/messages';
 import { buildMinutes, minuteMessage, minuteSender } from '../lib/minutes';
-import { queryRoom, roomHistory, recordedPubs, recordHash } from '../lib/ledger';
-import { readRoom, unlockRoom, saveRoomKey, loadRoomKey, aliasAccounts, findUserEpub, sealKeyFor } from '../lib/secretRoom';
+import { queryRoom, roomHistory, recordedPubs, recordHash, signed } from '../lib/ledger';
+import { readRoom, unlockRoom, saveRoomKey, loadRoomKey, aliasAccounts, findUser, sealKeyFor } from '../lib/secretRoom';
 import common, { colors, fonts } from '../lib/styles';
 
 // Automatic records (#21): after AUTO_EVERY new messages, once no message arrived for AUTO_QUIET
@@ -324,18 +324,19 @@ function Chat({route,navigation,alias,pair}){
     const Invitation=async(invitationuser)=>{
       const to = invitationuser.trim()
       if(!to) { return }
-      const epub = await findUserEpub(to)
-      if(epub === null) { alert("Several accounts are named "+to+", so the invitation was not sent."); return }
-      if(!epub) { alert("There is no user named "+to+"."); return }
-      const sealed = roomKey.current ? await sealKeyFor(roomKey.current, epub, pair) : ""
-      axios.post(`${API_URL}/api/invite`, {
+      const user = await findUser(to)
+      if(user === null) { alert("Several accounts are named "+to+", so the invitation was not sent."); return }
+      if(!user) { alert("There is no user named "+to+"."); return }
+      const sealed = roomKey.current ? await sealKeyFor(roomKey.current, user.epub, pair) : ""
+      axios.post(`${API_URL}/api/invite`, await signed({
         "RoomNumber":room,
         "From": alias,
         "FromEpub": pair.epub,
         "To": to,
+        "ToPub": user.pub,
         "DateTime": new Date().toISOString(),
         "Key": sealed,
-      }).then(() => {
+      }, pair)).then(() => {
         alert("Sent an invitation to "+to+".")
       }).catch((err) => {
         alert("Invitation: "+err.message)
