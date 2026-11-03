@@ -12,7 +12,8 @@
     "e2e:rooms": "node e2e/rooms.mjs",
     "e2e:attacks": "node e2e/attacks.mjs",
     "e2e:profile": "node e2e/profile.mjs",
-    "e2e:leave": "node e2e/leave.mjs"
+    "e2e:leave": "node e2e/leave.mjs",
+    "e2e:load": "node e2e/load.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",

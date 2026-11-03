@@ -1,6 +1,6 @@
 // Run with: node lib/messages.test.mjs
 import assert from 'node:assert';
-import { byTime, checkRecords, hashFirst, hashMessages, insertByTime, leftPubs, nextRecord, showTime, unreadCount } from './messages.js';
+import { byTime, checkRecords, hashFirst, hashMessages, insertByTime, leftPubs, messageList, nextRecord, PAGE, showTime, unreadCount } from './messages.js';
 
 const a = { key: 'a', at: 1, name: 'n1', message: 'm1', createdAt: 't1' };
 const b = { key: 'b', at: 2, name: 'n2', message: 'm2', createdAt: 't2' };
@@ -51,4 +51,25 @@ assert.deepStrictEqual([...leftPubs([membership('create', 'host'), membership('l
 assert.deepStrictEqual([...leftPubs([membership('create', 'host'), membership('leave', 'host'), membership('record', 'p2')])], ['host']);
 assert.deepStrictEqual([...leftPubs([membership('leave', 'p1'), membership('record', 'p1')])], []);
 assert.deepStrictEqual([...leftPubs([])], []);
+// messageList: the screen draws the latest `shown` messages
+const msg = (i) => ({ key: 'k' + String(i).padStart(4, '0'), at: i });
+const fill = (n, keep = false) => Array.from({ length: n }, (_, i) => i).reduce((s, i) => messageList(s, { message: msg(i), keep }), messageList.initial);
+const drawn = (s) => s.messages.slice(-s.shown).map((m) => m.at);
+let list = fill(120);
+assert.strictEqual(list.messages.length, 120);
+assert.deepStrictEqual(drawn(list), Array.from({ length: PAGE }, (_, i) => 70 + i));
+// the same key again changes nothing
+assert.strictEqual(messageList(list, { message: msg(5) }), list);
+// scrolling to the top draws PAGE more
+assert.deepStrictEqual(drawn(messageList(list, { type: 'more' }))[0], 20);
+// at the bottom a new message pushes the oldest drawn one out
+assert.deepStrictEqual(drawn(messageList(list, { message: msg(200) }))[0], 71);
+// scrolled up: a new message, or a late old one inside the drawn part, keeps the top message in view
+assert.deepStrictEqual(drawn(messageList(list, { message: msg(200), keep: true }))[0], 70);
+assert.deepStrictEqual(drawn(messageList(list, { message: { key: 'late', at: 80.5 }, keep: true }))[0], 70);
+// scrolled up: a late message older than the drawn part does not change what is drawn
+assert.deepStrictEqual(drawn(messageList(list, { message: { key: 'late', at: 10.5 }, keep: true })), drawn(list));
+// back at the bottom only the latest PAGE are drawn again
+assert.deepStrictEqual(drawn(messageList(messageList(list, { type: 'more' }), { type: 'bottom' })), drawn(list));
+assert.strictEqual(messageList(list, { type: 'bottom' }), list);
 console.log('ok');
